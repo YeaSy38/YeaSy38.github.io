@@ -1,0 +1,329 @@
+jQuery(function () {
+    
+    var widgetStyleElement = document.createElement('link');
+    widgetStyleElement.setAttribute('rel', 'stylesheet');
+    widgetStyleElement.setAttribute('type', 'text/css');
+    widgetStyleElement.setAttribute('media', 'screen');
+    widgetStyleElement.setAttribute('href', 'https://' + LIRACRM.widgetOptions.domain_callme + '/lirawidget/basepopup.min.css?rand='+LIRACRM.widgetOptions.cashVersion);
+    document.head.appendChild(widgetStyleElement);
+    widgetStyleElement.onload = function(){
+
+    var intervalCountdownTimer,
+        intervalStatusCall,
+        callId,
+        statusCall,
+        idleTimer = null,
+        idleState = false,
+        currentScroll = 0,
+        lastMouseY = null,
+        widgetOpened = /*LIRACRM.cookie.get('widgetOpened') ||*/ 0;
+
+    startCall = function () {
+        /*widgetOpened = 1;*/
+        //lira_log('LIRACRM Options '+LIRACRM.widgetOptions,4);
+        var phoneNumber = jQuery("#liracrm-phone-number").val().replace(/[^0-9*]/g, '');
+        var isWorkTime = LIRACRM.widgetOptions.isWorkTime();
+
+        if (phoneNumber.length < LIRACRM.widgetOptions.minPhoneLength || phoneNumber.length > LIRACRM.widgetOptions.maxPhoneLength || phoneNumber.indexOf(LIRACRM.widgetOptions.defaultPrefix.replace(/[^0-9*]/g, '')) != 0) {
+
+            jQuery("#liracrm-phone-number").focus().trigger('click');
+            jQuery(".liracrm-modal-dialog").addClass('liracrm-modal-wrong');
+
+            setTimeout(function () {
+                jQuery('.liracrm-modal-dialog').removeClass('liracrm-modal-wrong');
+            }, 1000);
+
+            return;
+        }
+        
+        var selectedDay = parseInt(jQuery(".liracrm-select-day .select select").val());
+        var selectedTime = jQuery(".liracrm-select-time .select select").val();
+        selectedTime = selectedTime.split(':');
+        var selectedHours = parseInt(selectedTime[0]);
+        var selectedMinutes = parseInt(selectedTime[1]);
+        var currentDate = new Date();
+        var selectedDate = new Date();
+        var currentDay = parseInt(currentDate.getDay());
+        if (currentDay === 0) currentDay = 7;
+        var daysTo;
+        if (selectedDay>currentDay) {
+            daysTo = selectedDay - currentDay;
+        } else if (selectedDay<currentDay) {
+            daysTo = 5 - currentDay + 2 + selectedDay;
+        } else {
+            if (currentDate < LIRACRM.widgetOptions.workTimeBegin) {
+                daysTo = 0;
+            } else {
+                daysTo = 5 - currentDay + 2 + selectedDay;
+            }
+        }
+        selectedDate.setDate(currentDate.getDate()+daysTo);
+        selectedDate.setHours(selectedHours);
+        selectedDate.setMinutes(selectedMinutes);
+        selectedDate.setSeconds(0);
+        selectedDate = selectedDate.getFullYear() + '-' +
+                       ((selectedDate.getMonth()+1)<9 ? ('0'+(selectedDate.getMonth()+1)) : (selectedDate.getMonth()+1)) + '-' +
+                       (selectedDate.getDate()<9 ? ('0'+selectedDate.getDate()) : selectedDate.getDate()) + ' ' +
+                       (selectedDate.getHours()<9 ? ('0'+selectedDate.getHours()) : selectedDate.getHours()) + ':' +
+                       (selectedDate.getMinutes()<9 ? ('0'+selectedDate.getMinutes()) : selectedDate.getMinutes()) + ':' +
+                       (selectedDate.getSeconds()<9 ? ('0'+selectedDate.getSeconds()) : selectedDate.getSeconds());
+        var sbjs_utm;
+        if (typeof sbjs !== 'undefined') {
+            sbjs_utm = {"utm_source":encodeURIComponent(sbjs.get.first.src),
+                            "utm_medium":encodeURIComponent(sbjs.get.first.mdm),
+                            "utm_campaign":encodeURIComponent(sbjs.get.first.cmp),
+                            "utm_term":encodeURIComponent(sbjs.get.first.trm)
+                        };
+        } else {
+            sbjs_utm = {"utm_source":"",
+                            "utm_medium":"",
+                            "utm_campaign":"",
+                            "utm_term":""
+                        };
+        }
+        
+        if (connected) {
+            var message_out = {
+                "info": "callback_outtime",
+                "connect": {
+                    "phone":phoneNumber,
+                    "clientId":LIRACRM.ga.getClientId(),
+                    "trackingId":LIRACRM.ga.getTrackingId(),
+                    "date":selectedDate,
+                    "utm_source":sbjs_utm['utm_source'],
+                    "utm_medium":sbjs_utm['utm_medium'],
+                    "utm_campaign":sbjs_utm['utm_campaign'],
+                    "utm_term":sbjs_utm['utm_term'],
+                    "current_url": location.href
+                }
+            };
+            socket.send(JSON.stringify(message_out));
+            lira_log('отправлены данные: '+JSON.stringify(message_out),4);
+            jQuery('.liracrm-message-help').text(LIRACRM.widgetOptions.callback_offline_text_success);
+        } else {
+            jQuery('.liracrm-message-help').text(LIRACRM.widgetOptions.callback_offline_text_fail);
+        }
+
+        
+    };
+
+    if (!jQuery("link[href='https://fonts.googleapis.com/css?family=Open+Sans:400,300,400italic,700,800']").length)
+        jQuery('head').append('<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,300,400italic,700,800" type="text/css" />');
+
+    //jQuery('head').append('<link rel="stylesheet" href="http://' + LIRACRM.widgetOptions.domain_callme + '/lirawidget/basepopup.css?v=1019" type="text/css" />');
+    
+    var today = new Date();
+    var currentDay = parseInt(today.getDay());
+    var optionsDay = [];
+    var nameDays = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+    var indexDay = 0;
+    for (var iday = 0; iday <= 6; iday++) {
+        if (indexDay > 2) break;
+        if (iday === 0 && today < LIRACRM.widgetOptions.workTimeBegin) {
+            if (LIRACRM.widgetOptions.workDay[currentDay] == '1') {
+                optionsDay[indexDay] = currentDay;indexDay++;
+            }
+        }
+        if (iday>0) {
+            if (LIRACRM.widgetOptions.workDay[currentDay] == '1') {
+                optionsDay[indexDay] = currentDay;indexDay++;
+            }
+        }
+        if (currentDay < 6) {
+            currentDay++;
+        } else {
+            currentDay = 0;
+        }
+    }
+    
+    /*if (currentDay<5) {
+        if (today < LIRACRM.widgetOptions.workTimeBegin) {
+            optionsDay[0] = currentDay;
+        } else {
+            optionsDay[0] = currentDay+1;
+        }
+    } else if (currentDay === 5) {
+        if (today < LIRACRM.widgetOptions.workTimeBegin) {
+            optionsDay[0] = currentDay;
+        } else {
+            optionsDay[0] = 1;
+        }
+    } else {
+        optionsDay[0] = 1;
+    }
+    indexDay = 0;
+    while (indexDay < 3) {
+        if ((optionsDay[indexDay]+1) > 0 && (optionsDay[indexDay]+1) <= 5) {
+            indexDay++;
+            optionsDay[indexDay] = optionsDay[indexDay-1]+1;
+        } else {
+            indexDay++;
+            optionsDay[indexDay] = 1;
+        }
+    }*/
+    
+    var timeBegin = new Date(LIRACRM.widgetOptions.workTimeBegin.toString());
+    
+    var timeBegin_1 = (timeBegin.getHours() < 9 ? ("0"+timeBegin.getHours()) : timeBegin.getHours())+':'+(timeBegin.getMinutes() < 9 ? ("0"+timeBegin.getMinutes()) : timeBegin.getMinutes());
+    timeBegin.setMinutes(timeBegin.getMinutes()+15);
+    var timeBegin_2 = (timeBegin.getHours() < 9 ? ("0"+timeBegin.getHours()) : timeBegin.getHours())+':'+(timeBegin.getMinutes() < 9 ? ("0"+timeBegin.getMinutes()) : timeBegin.getMinutes());
+    timeBegin.setMinutes(timeBegin.getMinutes()+15);
+    var timeBegin_3 = (timeBegin.getHours() < 9 ? ("0"+timeBegin.getHours()) : timeBegin.getHours())+':'+(timeBegin.getMinutes() < 9 ? ("0"+timeBegin.getMinutes()) : timeBegin.getMinutes());
+    timeBegin.setMinutes(timeBegin.getMinutes()+15);
+    var timeBegin_4 = (timeBegin.getHours() < 9 ? ("0"+timeBegin.getHours()) : timeBegin.getHours())+':'+(timeBegin.getMinutes() < 9 ? ("0"+timeBegin.getMinutes()) : timeBegin.getMinutes());
+    timeBegin.setMinutes(timeBegin.getMinutes()+15);
+    var timeBegin_5 = (timeBegin.getHours() < 9 ? ("0"+timeBegin.getHours()) : timeBegin.getHours())+':'+(timeBegin.getMinutes() < 9 ? ("0"+timeBegin.getMinutes()) : timeBegin.getMinutes());
+    timeBegin.setMinutes(timeBegin.getMinutes()+30);
+    var timeBegin_6 = (timeBegin.getHours() < 9 ? ("0"+timeBegin.getHours()) : timeBegin.getHours())+':'+(timeBegin.getMinutes() < 9 ? ("0"+timeBegin.getMinutes()) : timeBegin.getMinutes());
+    
+   var widgetHTML = "";
+    widgetHTML += "<div class=\"liracrm-modal\">";
+    widgetHTML += "  <input class=\"liracrm-modal-open\" id=\"liracrm-modal-callme\" type=\"checkbox\" hidden>";
+    widgetHTML += "  <div class=\"liracrm-modal-wrap\" aria-hidden=\"true\" role=\"dialog\">";
+    widgetHTML += "    <div class=\"liracrm-modal-dialog\">";
+
+    widgetHTML += "      <div class=\"liracrm-modal-body\">";
+    widgetHTML += "        <label class=\"liracrm-btn-close\" for=\"liracrm-modal-callme\" aria-hidden=\"true\">×<\/label>";
+    widgetHTML += "        <div id=\"liracrm-order-call\">";
+    widgetHTML += "          <div class=\"liracrm-greeting\">" + LIRACRM.widgetOptions.greetingMessage() + "<\/div>";
+    widgetHTML += "          <div class=\"liracrm-message-1\">" + LIRACRM.widgetOptions.dontWorkTimeMessage_1 + "<\/div>";
+    widgetHTML += "          <div id=\"liracrm-message-1-and-2\">";
+    widgetHTML += "             <div class=\"liracrm-message-2\">" + LIRACRM.widgetOptions.dontWorkTimeMessage_2 + "<\/div>";
+    widgetHTML += "             <div class=\"liracrm-select-day\">";
+    widgetHTML += "               <select class=\"lirax-select\" id=\"day\">";
+    widgetHTML += "                   <option value=\""+optionsDay[0]+"\">"+nameDays[optionsDay[0]]+"<\/option>";
+    widgetHTML += "                   <option value=\""+optionsDay[1]+"\">"+nameDays[optionsDay[1]]+"<\/option>";
+    widgetHTML += "                   <option value=\""+optionsDay[2]+"\">"+nameDays[optionsDay[2]]+"<\/option>";
+    widgetHTML += "               <\/select>";
+    widgetHTML += "             <\/div>";
+    widgetHTML += "             <div class=\"liracrm-message-3\">" + LIRACRM.widgetOptions.dontWorkTimeMessage_3 + "<\/div>";
+    widgetHTML += "             <div class=\"liracrm-select-time\">";
+    widgetHTML += "               <select class=\"lirax-select\" id=\"time\">";
+    widgetHTML += "                   <option value=\""+timeBegin_1+"\">"+timeBegin_1+"<\/option>";
+    widgetHTML += "                   <option value=\""+timeBegin_2+"\">"+timeBegin_2+"<\/option>";
+    widgetHTML += "                   <option value=\""+timeBegin_3+"\">"+timeBegin_3+"<\/option>";
+    widgetHTML += "                   <option value=\""+timeBegin_4+"\">"+timeBegin_4+"<\/option>";
+    widgetHTML += "                   <option value=\""+timeBegin_5+"\">"+timeBegin_5+"<\/option>";
+    widgetHTML += "                   <option value=\""+timeBegin_6+"\">"+timeBegin_6+"<\/option>";
+    widgetHTML += "               <\/select>";
+    widgetHTML += "             <\/div>";
+    widgetHTML += "          <\/div>";
+    widgetHTML += "          <div id=\"liracrm-input-phone\">";
+    widgetHTML += "             <input type=\"tel\" id=\"liracrm-phone-number\" placeholder=\"" + LIRACRM.widgetOptions.defaultPlaceholder + "\" value=\"\">";
+    widgetHTML += "             <button class=\"liracrm-btn liracrm-btn-primary\" id=\"liracrm-callme-go\">" + LIRACRM.widgetOptions.buttonText + "<\/button>";
+    widgetHTML += "          </div>";
+    widgetHTML += "          <div class=\"liracrm-message-help\"><\/div>";
+    widgetHTML += "        </div>";
+    widgetHTML += "      <\/div>";
+    
+    widgetHTML += "      <div class=\"liracrm-modal-footer\">";
+    widgetHTML += "        <div class=\"liracrm-text-help\">" + LIRACRM.widgetOptions.footerMessage + " <a href=\"http://lirax.ua/callback\" target=\"_blank\">LiraX</a><\/div>";
+    widgetHTML += "      <\/div>";
+    
+    widgetHTML += "    <\/div>";
+    widgetHTML += "  <\/div>";
+    widgetHTML += "<\/div>";
+    jQuery('body').append(widgetHTML);
+
+    jQuery('.liracrm-btn').css('background', LIRACRM.widgetOptions.color);
+    jQuery('#liracrm-phone-number').css('border-color', LIRACRM.widgetOptions.color);
+    jQuery('#liracrm-phone-number').css('color', LIRACRM.widgetOptions.color);
+    jQuery('.liracrm-text-help a').css('color', LIRACRM.widgetOptions.color);
+    jQuery('.liracrm-select-day').css('color', LIRACRM.widgetOptions.color);
+    jQuery('.liracrm-select-time').css('color', LIRACRM.widgetOptions.color);
+    jQuery('.liracrm-message-help').css('color', LIRACRM.widgetOptions.color);
+   
+    jQuery("#liracrm-callme").click(function () {
+        jQuery("#liracrm-modal-callme").trigger('click');
+    });
+
+    jQuery("#liracrm-modal-callme").click(function () {
+        if (typeof ga === 'function') {
+            ga('send', 'event', 'Widget', 'view');
+        }
+        /*widgetOpened = 1;
+        LIRACRM.cookie.set('widgetOpened', 1, {
+            expires: new Date(new Date().getTime() + 360 * 1000)
+        });*/
+    });
+
+    jQuery("#liracrm-phone-number").click(function () {
+        var input = jQuery(this);
+        if (!input.val()) {
+            var len = input.val(LIRACRM.widgetOptions.defaultPrefix).val().length;
+            input[0].setSelectionRange(len, len);
+        }
+    });
+
+    jQuery("#liracrm-callme-go").click(function () {
+        startCall();
+    });
+    
+    jQuery('select.lirax-select').each(function(){
+        var $this = jQuery(this), numberOfOptions = jQuery(this).children('option').length;
+
+        $this.addClass('select-hidden'); 
+        $this.wrap('<div class="select"></div>');
+        $this.after('<div class="select-styled"></div>');
+
+        var $styledSelect = $this.next('div.select-styled');
+        $styledSelect.text($this.children('option').eq(0).text());
+
+        var $list = jQuery('<ul />', {
+            'class': 'select-options'
+        }).insertAfter($styledSelect);
+
+        for (var i = 0; i < numberOfOptions; i++) {
+            jQuery('<li />', {
+                text: $this.children('option').eq(i).text(),
+                rel: $this.children('option').eq(i).val()
+            }).appendTo($list);
+        }
+
+        var $listItems = $list.children('li');
+
+        $styledSelect.click(function(e) {
+            e.stopPropagation();
+            jQuery('div.select-styled.active').not(this).each(function(){
+                jQuery(this).removeClass('active').next('ul.select-options').hide();
+            });
+            jQuery(this).toggleClass('active').next('ul.select-options').toggle();
+        });
+
+        $listItems.click(function(e) {
+            e.stopPropagation();
+            $styledSelect.text(jQuery(this).text()).removeClass('active');
+            $this.val(jQuery(this).attr('rel'));
+            $list.hide();
+            //lira_log($this.val(),4);
+        });
+
+        jQuery(document).click(function() {
+            $styledSelect.removeClass('active');
+            $list.hide();
+        });
+
+    });
+    
+    jQuery('select.lirax-select').css('color', LIRACRM.widgetOptions.color);
+    jQuery('head').append('<style type="text/css">'+
+                                '.liracrm-select-day .select-styled:after, .liracrm-select-time .select-styled:after {'+
+                                    'border-color: '+LIRACRM.widgetOptions.color+' transparent transparent transparent;'+
+                                '}'+
+                           '</style> ');
+    };
+  
+    jQuery( window ).resize(function() {
+        if (document.documentElement.clientWidth < 670 && document.documentElement.clientWidth >370) {
+            var winHeightPopup = jQuery(window).height();
+            //alert(document.documentElement.clientWidth+' '+winHeightPopup);
+            if (winHeightPopup<130) {
+                //alert('top dialog changed');
+                jQuery('.liracrm-modal .liracrm-modal-wrap .liracrm-modal-dialog').css( 'top', '-30%' );
+            } else {
+                jQuery('.liracrm-modal .liracrm-modal-wrap .liracrm-modal-dialog').css( 'top', '1%' );
+            }
+        }
+    });
+
+});

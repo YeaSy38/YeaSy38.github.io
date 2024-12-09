@@ -1,0 +1,2437 @@
+var ip = '', google_info;
+var hostname = location.href;
+var animateWidgetClass;
+var widgetPlaceClass;
+var timeOut = 2000;
+var checkTime, myInterval, inactivityClientTimeStart = new Date();
+var checkOneReconect = 0;
+var messageErrorConnect;
+var chatGreetingOffline = 1;
+var debug_level = LIRACRM.widgetOptions.widgetDebugLevel;
+var ct_provider_replace = '1';
+var widgetOpened = 0;
+var askDefault;
+
+if (getCookieLirax("roistat_visit") != undefined) {
+    var roistat_visit = getCookieLirax("roistat_visit");
+    //console.log('cookie');
+} else {
+    var roistat_visit = "(none)";
+    //console.log('source buster');
+}
+
+if (getCookieLirax("lirax_chat_greating_reason") != undefined) {
+    var lirax_chat_greating_reason = getCookieLirax("lirax_chat_greating_reason");
+    //console.log('cookie');
+} else {
+    var lirax_chat_greating_reason = "0";
+    //console.log('source buster');
+}
+
+if (getCookieLirax("lirax_sbsrc") != undefined) {
+    var sbsrc = getCookieLirax("lirax_sbsrc");
+    //console.log('cookie');
+} else {
+    var sbsrc = sbjs.get.current.src;
+    setCookieLirax('lirax_sbsrc', sbsrc, 3650);
+    //console.log('source buster');
+}
+if (getCookieLirax("lirax_sbmdm") != undefined) {
+    var sbmdm = getCookieLirax("lirax_sbmdm");
+    //console.log('cookie');
+} else {
+    var sbmdm = sbjs.get.current.mdm;
+    setCookieLirax('lirax_sbmdm', sbmdm, 3650);
+    //console.log('source buster');
+}
+if (getCookieLirax("lirax_sbcmp") != undefined) {
+    var sbcmp = getCookieLirax("lirax_sbcmp");
+    //console.log('cookie');
+} else {
+    var sbcmp = sbjs.get.current.cmp;
+    setCookieLirax('lirax_sbcmp', sbcmp, 3650);
+    //console.log('source buster');
+}
+if (getCookieLirax("lirax_sbtrm") != undefined) {
+    var sbtrm = getCookieLirax("lirax_sbtrm");
+    //console.log('cookie');
+} else {
+    var sbtrm = sbjs.get.current.trm;
+    setCookieLirax('lirax_sbtrm', sbtrm, 3650);
+    //console.log('source buster');
+}
+if (getCookieLirax("lirax_id_client") != undefined) {
+    var id_client = getCookieLirax("lirax_id_client");
+    //console.log('cookie');
+} else {
+    var id_client = "underfine";
+    //console.log('not set');
+}
+if (getCookieLirax("lirax_chat_move_height") != undefined) {
+    var lirachat_move_height = getCookieLirax("lirax_chat_move_height");
+} else {
+    var lirachat_move_height = "400px";
+}
+if (getCookieLirax("lirax_chat_move_right") != undefined) {
+    var lirachat_move_right = getCookieLirax("lirax_chat_move_right");
+} else {
+    var lirachat_move_right = "30px";
+}
+if (getCookieLirax("lirax_chat_open") != undefined) {
+    var chat_open = getCookieLirax("lirax_chat_open");
+} else {
+    var chat_open = "0";
+}
+
+if (getCookieLirax("lirax_not_animate_widget_due") != undefined) {
+    var widget_show_animate = getCookieLirax("lirax_not_animate_widget_due");
+} else {
+    var widget_show_animate = "1";
+}
+
+if (widget_show_animate == '1') {
+    animateWidgetClass = 'lirax-widget-animate';
+    setCookieToMidnightLirax('lirax_not_animate_widget_due', '0');
+} else {
+    animateWidgetClass = '';
+}
+
+var idleTimer = null,
+    idleState = false,
+    currentScroll = 0,
+    lastMouseY = null;
+
+var socket;
+var socketUrl = 'wss://'+LIRACRM.widgetOptions.socket_callme;
+lira_log('socket url '+socketUrl,4);
+//var socketUrl = 'ws://193.238.20.118:10080';
+var connected = 0;
+var socketInfo;
+var dotsA, timerA, callTimer;
+var chat_closed = true;
+var chatHeader, chatSubheader, chatGreeting, chatTextPlaceholder;
+var check_operator_status = "1";
+//createWidget();
+
+function disable_scroll() {
+    if(jQuery("html").css("position") != "fixed") {
+        var top = jQuery("html").scrollTop() ? jQuery("html").scrollTop() : jQuery("body").scrollTop();
+        if(window.innerWidth > jQuery("html").width()) {
+            jQuery("html").css("overflow-y", "scroll");
+        }
+        jQuery("html").css({"width": "100%", "height": "100%", "position": "fixed", "top": -top});
+    }
+}
+
+function enable_scroll() {
+    if(jQuery("html").css("position") == "fixed") {
+        jQuery("html").css("position", "static");
+        jQuery("html, body").scrollTop(-parseInt(jQuery("html").css("top")));
+        jQuery("html").css({"position": "", "width": "", "height": "", "top": "", "overflow-y": ""});
+    }
+}
+
+function setCookieLirax(c_name,value,exdays) {
+    var exdate=new Date();
+    exdate.setDate(exdate.getDate() + exdays);
+    var c_value=escape(value) + ((exdays==null) ? "" : "; expires="+exdate.toUTCString());
+    document.cookie=c_name + "=" + c_value+"; path=/";
+}
+
+function setCookieToMidnightLirax(c_name,value) {
+    var expires = "";
+    var date = new Date();
+    var dateUtc = new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()+1));
+    var midnight = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+    document.cookie=c_name + "=" + escape(value)+"; expires="+dateUtc.toString()+"; path=/";
+}
+    
+function getCookieLirax(c_name) {
+var i,x,y,ARRcookies=document.cookie.split(";");
+for (i=0;i<ARRcookies.length;i++)
+{
+  x=ARRcookies[i].substr(0,ARRcookies[i].indexOf("="));
+  y=ARRcookies[i].substr(ARRcookies[i].indexOf("=")+1);
+  x=x.replace(/^\s+|\s+$/g,"");
+  if (x==c_name)
+        {
+            return unescape(y);
+        }
+    }
+}
+
+function lira_log(text, level) {
+    if (debug_level >= level) {
+        console.log(text);
+    }
+}
+  
+var Color = net.brehaut.Color;
+
+var widgetColor = Color(LIRACRM.widgetOptions.color);
+var widgetColorLighten = widgetColor.lightenByAmount(0.45);
+var widgetColorLightenHeader = widgetColor.lightenByAmount(0.1);
+
+if (LIRACRM.widgetOptions.placeLeft) {
+    widgetPlaceClass = '-left';
+} 
+
+if (LIRACRM.widgetOptions.placeRight) {
+    widgetPlaceClass = '';
+}
+
+if (getCookieLirax("lirax_chat_show_greeting") != undefined) {
+    var chat_show_greeting = getCookieLirax("lirax_chat_show_greeting");
+} else {
+    var chat_show_greeting = "1";
+}
+if (getCookieLirax("lirax_chat_show_greeting_offline") != undefined) {
+    var chatGreetingOffline = getCookieLirax("lirax_chat_show_greeting_offline");
+} else {
+    var chatGreetingOffline = "1";
+}
+
+if (LIRACRM.widgetOptions.isWorkTime()) {
+    askDefault = false;
+    chatHeader = LIRACRM.widgetOptions.chat_header_open_online;
+    chatSubheader = LIRACRM.widgetOptions.chat_subheader_open_online;
+    chatGreeting = LIRACRM.widgetOptions.chat_greeting_online;
+} else {
+    if (chat_show_greeting == "1") {
+        askDefault = false;
+    } else {
+        askDefault = true;
+    }
+    chatHeader = LIRACRM.widgetOptions.chat_header_open_offline;
+    chatSubheader = LIRACRM.widgetOptions.chat_subheader_open_offline;
+    chatGreeting = LIRACRM.widgetOptions.chat_greeting_offline;
+}
+
+if (getCookieLirax("lirax_chat_manager_avatar") != undefined) {
+    var chat_manager_avatar = getCookieLirax("lirax_chat_manager_avatar");
+} else {
+    var chat_manager_avatar = '';
+    //var chat_manager_avatar = 'http://' + LIRACRM.widgetOptions.domain_callme + '/lirawidget/images/defaultuser.jpg';
+}
+
+if (getCookieLirax("lirax_chat_manager_name") != undefined) {
+    var chat_manager_name = getCookieLirax("lirax_chat_manager_name");
+} else {
+    var chat_manager_name = chatHeader;
+}
+
+if (getCookieLirax("lirax_chat_manager_subname") != undefined) {
+    var chat_manager_subname = getCookieLirax("lirax_chat_manager_subname");
+} else {
+    var chat_manager_subname = chatSubheader;
+}
+
+chatTextPlaceholder = LIRACRM.widgetOptions.chat_placeholder;
+ 
+Widget = {
+    created: false,
+    widgetElement: null,
+    widgetButton: null,
+    styleElement: null,
+    actionElement: null,
+    templateControls: null,
+    show: function() {
+        if (this.created) return;
+        
+        this.styleElement = document.createElement('style');
+        this.styleElement.innerHTML = '.lirax-widget'+widgetPlaceClass+'.showCallBackPanel .lirax-widget-controls .lirax-widget-callback-control {'+
+                                            'background-color: '+widgetColorLighten+' !important;'+
+                                            'color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-widget'+widgetPlaceClass+'.showChatPanel .lirax-widget-controls .lirax-widget-chat-control {'+
+                                            'background-color: '+widgetColorLighten+' !important;'+
+                                            'color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-callback-header {'+
+                                            'background-color:'+widgetColorLightenHeader+' !important;'+
+                                        '}'+
+                                        '.lirax-widget'+widgetPlaceClass+' .lirax-widget-backgrounds .lirax-widget-layer-one {'+
+                                            'background-color:'+widgetColorLighten+' !important;'+
+                                        '}'+
+                                        '.lirax-widget'+widgetPlaceClass+' .lirax-widget-backgrounds .lirax-widget-layer-one::before {'+
+                                            'border-left-color:'+widgetColorLighten+' !important;'+
+                                        '}'+
+                                        '.lirax-widget'+widgetPlaceClass+' .lirax-widget-backgrounds .lirax-widget-layer-two {'+
+                                            'background-color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-widget'+widgetPlaceClass+' .lirax-widget-backgrounds .lirax-widget-layer-two::before {'+
+                                            'border-left-color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-widget'+widgetPlaceClass+' .lirax-widget-buttons-back {'+
+                                            'background-color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-widget'+widgetPlaceClass+' .lirax-widget-controls a {'+
+                                            'background-color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-callback-input:before {'+
+                                            'background-color:'+widgetColor+';'+
+                                        '}'+
+                                        '.lirax-callback-submit {'+
+                                            'background-color:'+widgetColor+';'+
+                                        '}'+
+                                        '.lirax-informer {'+
+                                            'background-color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-widget-panel'+widgetPlaceClass+' .lirax-callback-header {'+
+                                            'background-color:'+widgetColorLightenHeader+' !important;'+
+                                        '}'+
+                                        '.lirax-widget-panel'+widgetPlaceClass+' .lirax-callback-content button[type="submit"].lirax-callback-submit:disabled {'+
+                                            'background-color:'+widgetColor+' !important;'+
+                                            'opacity: 0.5 !important;'+
+                                        '}'+
+                                        '.lirax-widget-panel'+widgetPlaceClass+' .lirax-callback-content button[type="submit"].lirax-callback-submit {'+
+                                            'background-color:'+widgetColor+' !important;'+
+                                            'opacity: 1 !important;'+
+                                        '}'+
+                                        '.lirax-widget-panel'+widgetPlaceClass+' .lirax-informer.lirax-user-rating {'+
+                                            'background-color: #ffffff !important;'+
+                                        '}'+
+                                        '.lirax-widget-panel'+widgetPlaceClass+' .lirax-informer-rating-stars > i:hover {'+
+                                            'color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-widget-panel'+widgetPlaceClass+' .lirax-informer-rating-stars > i.active {'+
+                                            'color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-widget-panel'+widgetPlaceClass+' .lirax-informer-rating-stars > i:hover ~ i:before {'+
+                                            'color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-widget-panel'+widgetPlaceClass+' .lirax-informer-rating-stars > i.active ~ i:before {'+
+                                            'color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '.lirax-widget-panel'+widgetPlaceClass+' .lirax-chat-wrap #lirax-chat-header {'+
+                                            'background-color:'+widgetColor+' !important;'+
+                                        '}'+
+                                        '#lirax-chat-body .lirax-chat-message-operator .lirax-chat-message-text {'+
+                                            'background-color:'+widgetColorLightenHeader+' !important;'+
+                                        '}'+
+                                        '#lirax-chat-body .lirax-chat-message-operator .lirax-chat-message-text::before {'+
+                                            'border-right-color:'+widgetColorLightenHeader+' !important;'+
+                                        '}'+
+                                        '#lirax-chat-footer-field:focus {'+
+                                            'border-color:'+widgetColorLightenHeader+' !important;'+
+                                        '}'+
+                                        '@media screen and (max-width: 425px) {'+
+                                            '.lirax-widget'+widgetPlaceClass+' .lirax-widget-controls .lirax-widget-callback-control {'+
+                                                'background-color: '+widgetColorLightenHeader+' !important;'+
+                                            '}'+
+                                                '.lirax-widget'+widgetPlaceClass+' .lirax-widget-buttons-back {'+
+                                                'background-color:'+widgetColor+' !important;'+
+                                            '}'+
+                                            '.lirax-widget'+widgetPlaceClass+' .lirax-widget-controls a {'+
+                                                'background-color:'+widgetColor+' !important;'+
+                                            '}'+
+                                        '}';
+        document.head.insertBefore(this.styleElement, document.body.nextSibling);
+        
+        //this.styleElement = document.createElement('link');
+        //this.styleElement.setAttribute('rel', 'stylesheet');
+        //this.styleElement.setAttribute('type', 'text/css');
+        //this.styleElement.setAttribute('media', 'screen');
+        //this.styleElement.setAttribute('href', 'http://' + LIRACRM.widgetOptions.domain_callme + '/lirawidget/lira-chat.css');
+        //document.head.appendChild(this.styleElement);
+        
+        this.widgetElement = document.createElement('div');
+        this.widgetElement.setAttribute('id', 'liraPanel');
+        this.widgetElement.setAttribute('class', 'lirax-widget-panel'+widgetPlaceClass);
+        
+    if (LIRACRM.widgetOptions.chatShow) {
+        
+        this.widgetElement.innerHTML += '<div class="lirax-chat-wrap" id="lirax-chat-wrap">'+
+                                            '<audio hidden id="chat_new_message_sound" src="https://'+LIRACRM.widgetOptions.domain_callme+'/confirm_1.mp3"></audio>'+
+                                            '<div id="lirax-chat-header">'+
+                                                '<a href="#" data-action="showliraChat" class="lirax-widget-close-control" id="lirax-widget-mobile-chat-close">'+
+                                     '<span class="lw-icon-close"></span>'+
+                                                '</a>'+
+                                                '<div id="lirax-chat-userpic" style="">'+
+                                                        '<img src="'+chat_manager_avatar+'" alt="userpic">'+
+                                                        '<!-- <i class="liracon-user"></i> -->'+
+                                                '</div>'+
+                                                '<div id="lirax-chat-usertitle" style="">'+chat_manager_name+'</div>'+
+                                                '<div id="lirax-chat-usersubtitle">'+chat_manager_subname+'</div>'+
+                                                '<!--<a href="#" id="lirax-callack-button" onclick="LIRAX.showWidget();" title="Позвонить">'+
+                                                        '<i id="liracon-phone" class="liracon-phone"></i><span>Позвонить</span>'+
+                                                '</a>-->'+
+                                            '</div>'+
+                                            '<div id="lirax-chat-body">'+
+                                                    '<div id="lirax-chat-body-wrap" class="lirax-chat-body-wrap">'+
+                                                            '<div id="lirax-chat-body-subwrap">'+
+                                                            '</div>'+
+                                                    '</div>'+
+                                            '</div>'+
+                                            '<div id="lirax-chat-footer" class="">'+
+                                                '<div id="lirax-service-message"></div>'+
+                                                '<form action="#" id="lirax-form-chat">'+
+                                                '<textarea name="message" placeholder="'+chatTextPlaceholder+'" id="lirax-chat-footer-field"></textarea>'+
+                                                '</form>'+
+                                                '<!--<span id ="lirax-chat-icon-send" class="chat-icon-send-message lw-icon-comment-discussion"></span>-->'+
+                                            '</div>'+
+                                        '</div>';
+            
+    }
+    if (LIRACRM.widgetOptions.widgetShow) {
+        
+        this.widgetElement.innerHTML += '<div class="lirax-callback-wrap hide">'+
+                                                '<div class="lirax-callback-header">'+
+                                                        '<div class="lirax-callback-title">'+LIRACRM.widgetOptions.callback_header_open+'</div>'+
+                                                '</div>'+
+                                                '<div class="lirax-callback-content">'+
+                                                        '<!--<form id="formCallBack" autocomplete="off">-->'+
+                                                                '<div class="lirax-form-control lirax-input-progress_">'+
+                                                                        '<label for="lirax-widget-phone-number" >'+LIRACRM.widgetOptions.callback_label_phone+'</label>'+
+                                                                        '<div class="lirax-input-wrap lirax-input-wrap-phone">'+
+                                                                                '<input type="tel" class="lirax-callback-input" id="lirax-widget-phone-number" value="+'+LIRACRM.widgetOptions.defaultPrefix+'" required maxlength="13">'+
+                                                                                '<input type="hidden" name="Phone" id="lirax-widget-phone" value="+380">'+
+                                                                        '</div>'+
+                                                                '</div>'+
+                                                                '<div class="lirax-form-control">'+
+                                                                        '<button type="submit" class="lirax-callback-submit" disabled id="formCallBackSubmit">'+LIRACRM.widgetOptions.callback_button_start_call+'</button>'+
+                                                                '</div>'+
+                                                        '<!--</form>-->'+
+                                                '</div>'+
+                                        '</div>'+
+                                        '<div class="lirax-informer">'+
+                                                '<div class="lirax-informer-connection">'+
+                                                        LIRACRM.widgetOptions.callback_text_connection+'<span class="dots-animation"></span>'+
+                                                '</div>'+
+                                                '<div class="lirax-informer-user">'+
+                                                        '<div class="lirax-informer-user-pic" id="liraUserPic">'+
+                                                                '<img src="" />'+
+                                                        '</div>'+
+                                                        '<div class="lirax-informer-user-name" id="liraUserName" style="width:116px;white-space: nowrap;overflow: hidden;text-overflow: ellipsis; /* Многоточие */"></div>'+
+                                                        '<div class="lirax-informer-user-status" id="liraUserStatus">'+
+                                                                '<span class="lirax-user-status-text">'+LIRACRM.widgetOptions.callback_text_already_call+'</span><span class="dots-animation"></span>'+
+                                                        '</div>'+
+                                                '</div>'+
+                                                '<div class="lirax-informer-timer">'+
+                                                        '<i class="lw-icon-timer"></i>'+
+                                                        '<span id="liraTimer">30</span>'+
+                                                '</div>'+
+                                                '<div class="lirax-informer-watch">'+
+                                                        '<i class="lw-icon-schedule"></i>&nbsp;'+
+                                                        '<span id="liraWatch"><span class="l-min">00</span>:<span class="l-sec">00</span></span>'+
+                                                '</div>'+
+                                                '<div class="lirax-informer-rating">'+
+                                                        '<div class="lirax-informer-rating-title">'+LIRACRM.widgetOptions.callback_text_thank+'</div>'+
+                                                        '<div class="lirax-informer-rating-question">'+LIRACRM.widgetOptions.callback_text_rating+'</div>'+
+                                                        '<div class="lirax-informer-rating-stars" id="liraStars">'+
+                                                                '<i class="lw-icon-star" data-rate="5"></i>'+
+                                                                '<i class="lw-icon-star" data-rate="4"></i>'+
+                                                                '<i class="lw-icon-star"	data-rate="3"></i>'+
+                                                                '<i class="lw-icon-star"	data-rate="2"></i>'+
+                                                                '<i class="lw-icon-star"	data-rate="1"></i>'+
+                                                        '</div>'+
+                                                '</div>'+
+                                        '</div>';
+            
+    }
+        //this.widgetElement.style.display = 'block';
+        document.body.insertBefore(this.widgetElement, document.body.nextSibling);
+        lira_log('widget html added', 4);
+
+        this.widgetButton = document.createElement('div');
+        this.widgetButton.setAttribute('id', 'liraWidget');
+        this.widgetButton.setAttribute('class', 'lirax-widget'+widgetPlaceClass+' lirax-widget-wrap '+animateWidgetClass);
+        
+        this.templateControls = '<div class="lirax-widget-backgrounds">'+
+                                        '<div class="lirax-widget-layer-one"></div>'+
+                                        '<div class="lirax-widget-layer-two"></div>'+
+                                '</div>'+
+                                '<div class="lirax-widget-buttons">'+
+                                        '<div class="lirax-widget-buttons-front">';
+    if (LIRACRM.widgetOptions.widgetShow) {
+        
+        this.templateControls += '               <span class="lw-icon-phone"></span>';
+        
+        if (!LIRACRM.widgetOptions.chatShow) {
+            
+            this.templateControls += '               <span class="lw-icon-phone"></span>';
+        }
+        
+        
+    }
+    if (LIRACRM.widgetOptions.chatShow) {    
+        
+        this.templateControls += '               <span class="lw-icon-comment-discussion"></span>';
+        
+        if (!LIRACRM.widgetOptions.widgetShow) {
+            
+            this.templateControls += '               <span class="lw-icon-comment-discussion"></span>';
+            
+        }
+        
+    }
+    /*if (!LIRACRM.widgetOptions.isWorkTime()) {
+        
+        this.templateControls += '               <span class="lw-icon-phone"></span>';
+        this.templateControls += '               <span class="lw-icon-phone"></span>';
+
+    }*/
+        this.templateControls += '       </div>'+
+                                        '<div class="lirax-widget-buttons-back">'+
+                                                '<span class="lirax-widget-text">'+LIRACRM.widgetOptions.widget_main_button_text+'</span>'+
+                                        '</div>'+
+                                '</div>'+
+                                '<div class="lirax-widget-controls">';
+    if (LIRACRM.widgetOptions.chatShow) {    
+        
+        this.templateControls += '      <a href="" data-action="showliraChat" class="lirax-widget-chat-control">'+
+                                                '<span class="lw-icon-comment-discussion"></span>'+
+                                                '<span class="lw-icon-close"></span>'+
+                                        '</a>';
+            
+    }
+    if (LIRACRM.widgetOptions.widgetShow) {
+        
+        this.templateControls += '      <a href="" data-action="showliraCallback" class="lirax-widget-callback-control">'+
+                                                '<span class="lw-icon-phone"></span>'+
+                                                '<span class="lw-icon-close"></span>'+
+                                        '</a>';
+    
+    }
+    /*if (!LIRACRM.widgetOptions.isWorkTime()) {
+        
+        this.templateControls += '      <a href="javascript:;" data-action="showliraCallback" class="lira-widget-callback-control">\
+                                                <span class="lw-icon-phone"></span>\
+                                                <span class="lw-icon-close"></span>\
+                                        </a>';
+    
+    }*/
+        this.templateControls += '</div>';
+        this.widgetButton.innerHTML = this.templateControls;
+        document.body.insertBefore(this.widgetButton, document.body.nextSibling);
+        this.created = true;
+    }
+};
+
+var widgetStyleElement = document.createElement('link');
+widgetStyleElement.setAttribute('rel', 'stylesheet');
+widgetStyleElement.setAttribute('type', 'text/css');
+widgetStyleElement.setAttribute('media', 'screen');
+widgetStyleElement.setAttribute('href', 'https://' + LIRACRM.widgetOptions.domain_callme + '/lirawidget/lira-widget.min.css?rand='+LIRACRM.widgetOptions.cashVersion);
+document.head.appendChild(widgetStyleElement);
+widgetStyleElement.onload = function(){
+    lira_log('widget style loaded',4);
+if (getCookieLirax("lirax_save_today_history") == undefined) {
+    setCookieToMidnightLirax('lirax_save_today_history', '1');
+    clearAllChatHistory();
+}
+if (LIRACRM.widgetOptions.chatShow || LIRACRM.widgetOptions.widgetShow || LIRACRM.widgetOptions.hide_widget == 1) {
+    //var publicIp = httpGet('//api.ipify.org?format=jsonp&callback=?');
+    google_info = {
+        "ip":ip,
+        "hostname":hostname,
+        "sbsrc":sbsrc,
+        "sbmdm":sbmdm,
+        "sbcmp":sbcmp,
+        "sbtrm":sbtrm,
+        "id_client":id_client,
+        "widget_id":LIRAX.widgetOptions.token,
+        "ga_client_id":LIRAX.ga.getClientId(),
+        "ga_site_id":LIRAX.ga.getTrackingId(),
+        "reason":lirax_chat_greating_reason,
+        "roistat_visit":roistat_visit,
+        "is_work_time": LIRACRM.serverIsWorkTime
+    };
+    startSocket(google_info);
+}
+
+function httpGet(theUrl) {
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.responseType = 'text';
+    xmlHttp.open( "GET", theUrl, true );
+    xmlHttp.addEventListener('load', addip);
+    xmlHttp.send( null );
+    //return xmlHttp.response;
+}
+
+function addip(e) {
+    var data = e.target;
+    var ip_row = data.response;
+    var ip_json = ip_row.match(/\(([^)]+)\)/)[1];
+    ip = JSON.parse(ip_json);
+}
+
+if (LIRACRM.widgetOptions.chatShow || LIRACRM.widgetOptions.widgetShow) {
+    Widget.show();
+    // startSocket();
+    if (chat_manager_avatar != '') {
+        jQuery('#lirax-chat-userpic img').show();
+    } else {
+        jQuery('#lirax-chat-userpic img').hide();
+    }    
+}
+
+if (!LIRACRM.widgetOptions.chatShow) {
+    jQuery( ".lirax-widget-callback-control" ).css( 'left', '0' );
+}
+if (!LIRACRM.widgetOptions.widgetShow) {
+    jQuery( ".lirax-widget-chat-control" ).css( 'right', '0' );
+}
+
+if (LIRACRM.widgetOptions.chatShow) {
+    
+    //var chatWrapHeight = jQuery("#lirax-chat-wrap").height();
+    
+    //alert(chatWrapHeight+'= '+screen.height+' '+jQuery(window).height()+' '+document.documentElement.clientWidth);
+    jQuery( window ).resize(function() {
+        var chatWrapHeight = jQuery("#lirax-chat-wrap").height();
+        if (chatWrapHeight > (screen.height-15)) {
+            jQuery("#lirax-chat-wrap").css('height', (screen.height-15)+'px');
+            chatWrapHeight = jQuery("#lirax-chat-wrap").height();
+        }
+    });
+    /*jQuery( window ).resize(function() {
+        //console.log('screen.height ',screen.height);
+        //console.log('window.height ',$(window).height());
+        //console.log('chatWrapHeight ',chatWrapHeight);
+        //console.log('screen.width ',$(window).width());
+        var chatWrapHeight = jQuery("#lirax-chat-wrap").height();
+        alert(chatWrapHeight+'= '+screen.height+' '+jQuery(window).height());
+        if (chatWrapHeight > (screen.height)) {
+            jQuery("#lirax-chat-wrap").css('height', (screen.height)+'px');
+            chatWrapHeight = jQuery("#lirax-chat-wrap").height();
+            //alert(chatWrapHeight+'>');
+        } else if (chatWrapHeight > (jQuery(window).height())) {
+            jQuery("#lirax-chat-wrap").css('height', (jQuery(window).height())+'px');
+            chatWrapHeight = jQuery("#lirax-chat-wrap").height();
+            //alert(chatWrapHeight+'<');
+        }
+    });*/
+    
+    if (document.documentElement.clientWidth < 425) {
+        var winHeight = jQuery(window).height();
+        var chatBodyDivHeigth = Math.floor((winHeight-(60+0+82))/winHeight*100);
+        jQuery( "#lirax-chat-body" ).css( 'height', chatBodyDivHeigth+'%' );
+        
+        jQuery( window ).resize(function() {
+            var winHeight = jQuery(window).height();
+            var chatBodyDivHeigth = Math.floor((winHeight-(60+0+82))/winHeight*100);
+            jQuery( "#lirax-chat-body" ).css( 'height', chatBodyDivHeigth+'%' );
+            
+        });
+        
+    }
+
+    window.onunload = function() {
+        if (connected) {
+            var message_out = {
+                "info": "message_end_dialog",
+                "msg_values": {
+                    "widget_id": LIRAX.widgetOptions.token,
+                    "client_id": id_client
+                }
+            };
+            socket.send(JSON.stringify(message_out));
+            lira_log('отправлены данные: '+JSON.stringify(message_out),4);
+        }
+    };
+
+    if (!LIRACRM.widgetOptions.widgetShow) {
+        jQuery('.lirax-widget'+widgetPlaceClass+' .lirax-widget-controls > a').first().css('bottom', '0px');
+        jQuery('.lirax-widget'+widgetPlaceClass+' .lirax-widget-controls > a').first().css('top', 'auto');
+    }
+
+    var widgetContainer = document.getElementById('lirax-chat-wrap');
+        widgetContainer.addEventListener('mouseenter', disable_scroll);
+        widgetContainer.addEventListener('mouseleave', enable_scroll);
+    var textArea = document.getElementById('lirax-chat-footer-field'),
+        formChatArea = document.getElementById('lirax-form-chat'),    
+        //textAreaIconClick = document.getElementById('lirax-chat-icon-send'),
+        area = document.getElementById('lirax-chat-body-wrap'),
+        subArea = document.getElementById('lirax-chat-body-subwrap'),
+        loadTime = new Date(), lastDateMessage = new Date(2016,10,23), triger, keydowns = 0;
+    var p = document.getElementById('lirax-chat-header');
+    var wc = document.getElementById('lirax-chat-wrap');
+    var supportwidgetContainer = document.getElementById('lirax-chat-wrap');
+    p.addEventListener('mousedown', initDrag);
+    addLocalHistoryToChat();
+    scrollDownChat();
+    formChatArea.addEventListener('submit', function (e){
+        e.preventDefault();
+        var message = this.value.trim();
+        if (message != '') { sendMessage(message, false, false, true); } else { textArea.value = ''; }
+    }, false);
+    // Отправка сообщение по клику ENTER и 0
+    textArea.addEventListener('keyup', function (e){
+            var message = this.value.trim();
+        //ENTER
+        if((e.keyCode == 13 && !e.shiftKey) || (e.which == 13 && !e.shiftKey)){
+            e.preventDefault();
+            //message != '' ? sendMessage(message, false, false, true) : textArea.value = '';
+        } else {
+        //keydowns = keydowns + 1;
+
+        //if (keydowns>5 && e.keyCode != 13) {
+            if (connected) {
+                var message_out = {
+                    "info": "client_message_typing",
+                    "msg_values": {
+                        "text": message,
+                        "widget_id": LIRAX.widgetOptions.token,
+                        "client_id": id_client
+                    }
+                };
+                socket.send(JSON.stringify(message_out));
+                lira_log('Отправлены данные: '+JSON.stringify(message_out),4);
+            }
+            //keydowns = 0;
+        //}
+        }
+    }, false);
+    textArea.addEventListener('keydown', function (e){
+        var message = this.value.trim();
+        //ENTER
+        if((e.keyCode == 13 && !e.shiftKey) || (e.which == 13 && !e.shiftKey)){
+            e.preventDefault();
+            if (message != '') { sendMessage(message, false, false, true); } else { textArea.value = ''; }
+        }
+    }, false);
+    /*textAreaIconClick.addEventListener('click', function (e){
+        var message = textArea.value.trim();
+        e.preventDefault();
+        message != '' ? sendMessage(message, false, false, true) : textArea.value = '';
+        
+    }, false);*/
+    
+}
+
+if (LIRACRM.widgetOptions.widgetShow || LIRACRM.widgetOptions.hide_widget == 1) {
+    
+    if (LIRACRM.widgetOptions.forcedOpen && LIRACRM.widgetOptions.isWorkTime()) {
+        setTimeout(function () {
+            if (!widgetOpened && chat_closed) {
+                jQuery('#liraWidget').addClass('showCallBackPanel');
+                jQuery('#liraPanel').addClass('showCallBackPanel');
+                widgetOpened = 1;
+            }
+        }, LIRACRM.widgetOptions.forcedOpen * 1000);
+    }
+
+    if (LIRACRM.widgetOptions.inactivityOpen && LIRACRM.widgetOptions.isWorkTime()) {
+        jQuery('*').bind('mousemove mousedown keydown scroll', function () {
+            if (ct_provider_replace == '0') {
+                lira_log('replace calltracking',4);
+                var randomStringAvoidCash = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                LIRACRM.loadCt(randomStringAvoidCash);
+                ct_provider_replace = '1';
+            }
+            clearTimeout(idleTimer);
+            inactivityClientTimeStart = new Date();
+            //if (idleState == true) {}
+            idleState = false;
+            idleTimer = setTimeout(function () {
+                if (!widgetOpened && chat_closed) {
+                    jQuery('#liraWidget').addClass('showCallBackPanel');
+                    jQuery('#liraPanel').addClass('showCallBackPanel');
+                    widgetOpened = 1;
+                }
+                idleState = true;
+            }, LIRACRM.widgetOptions.inactivityOpen * 1000);
+        });
+        jQuery("body").trigger("mousemove");
+    } else {
+        jQuery('*').bind('mousemove mousedown keydown scroll', function () {
+            if (ct_provider_replace == '0') {
+                lira_log('replace calltracking',4);
+                var randomStringAvoidCash = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                LIRACRM.loadCt(randomStringAvoidCash);
+                ct_provider_replace = '1';
+            }
+            inactivityClientTimeStart = new Date();
+        });
+        jQuery("body").trigger("mousemove");
+    }
+
+    if (LIRACRM.widgetOptions.closeOpen && LIRACRM.widgetOptions.isWorkTime()) {
+        
+        var lastClientY;8
+        jQuery(document).scroll(function () {
+            currentScroll = jQuery(this).scrollTop();
+            lastMouseY = currentScroll + lastClientY+10;
+        }).mousemove(function (e) {
+            var speed = lastMouseY - e.pageY;
+            var success_val = e.pageY - speed;
+            if (success_val < lastMouseY && success_val <= currentScroll) {
+                if (chat_closed) {
+                    jQuery('#liraWidget').addClass('showCallBackPanel');
+                    jQuery('#liraPanel').addClass('showCallBackPanel');
+                    widgetOpened = 1;
+                }
+            }
+            lastMouseY = e.pageY;
+            lastClientY = e.clientY;
+        });
+    }
+
+    if (!LIRACRM.widgetOptions.chatShow) {
+        jQuery('.lirax-widget'+widgetPlaceClass+' .lirax-widget-controls > a').first().css('bottom', '0px');
+        jQuery('.lirax-widget'+widgetPlaceClass+' .lirax-widget-controls > a').first().css('top', 'auto');
+    }
+
+//    var callbackInput = document.getElementById('lirax-widget-phone-number');
+    var callbackInput = document;
+        // callbackInput.addEventListener('keydown', phoneInputValidate);
+        // callbackInput.addEventListener('keyup', phoneInputValidateKeyup);
+        // callbackInput.addEventListener('paste', phoneInputValidatePaste);
+    var informer = jQuery('#liraPanel').find('.lirax-informer');
+
+
+    jQuery('#formCallBackSubmit').click(function(e){
+        var callbackphone = jQuery('#lirax-widget-phone-number').val().replace(/ /g, '');
+
+        jQuery('.lirax-callback-wrap').removeClass('timerStart');
+        jQuery('.lirax-informer').removeClass('lirax-user-connect');
+        messageErrorConnect = LIRACRM.widgetOptions.callback_text_connection+'<span class="dots-animation"></span>';
+        jQuery('.lirax-informer-connection').html(messageErrorConnect);
+        jQuery('.lirax-informer-timer').show();
+        jQuery('#liraTimer').text('30');
+
+        jQuery('.lirax-callback-wrap').addClass('timerStart');
+        jQuery('#liraWidget').addClass('showCallBackPanel');
+        if (jQuery('.lirax-informer').hasClass('lirax-informer-hide')) {
+            jQuery('.lirax-informer').removeClass('lirax-informer-hide');
+        }
+        jQuery('.lirax-informer').addClass('lirax-user-connect lirax-informer-show');
+        dotsAnimation();
+        startTimerA();
+        if (connected) {
+            var message_out = {
+                "info": "callback_phone",
+                "msg_values": {
+                    "text": callbackphone,
+                    "current_url":location.href
+                }
+            };
+            socket.send(JSON.stringify(message_out));
+            lira_log('отправлены данные: '+JSON.stringify(message_out),4);
+        }
+    });
+
+    jQuery('#liraStars > i').click(function(e){
+        var target = jQuery(e.currentTarget);
+        lira_log(e.currentTarget,4);
+        target.addClass('active').siblings().removeClass('active').closest('.lirax-informer-rating').addClass('lirax-voted');
+        jQuery('.lirax-blur').removeClass('lirax-blur lirax-blur-color');
+        setTimeout(function(){
+                jQuery('#liraPanel').removeClass('showCallBackPanel');
+        }, 1000);
+        setTimeout(function(){
+                callBackDefault();
+        }, 1300);
+        lira_log(target.data(),4);
+        if (connected) {
+            var message_out = {
+                "info": "callback_raiting",
+                "msg_values": {
+                    "text": target.data()
+                }
+            };
+            socket.send(JSON.stringify(message_out));
+            lira_log('отправлены данные: '+JSON.stringify(message_out),4);
+        }
+    });
+
+}
+jQuery('#lirax-widget-mobile-chat-close').click(function(e){
+    jQuery('#liraPanel').removeClass('showChatPanel');
+    jQuery('#liraWidget').removeClass('showChatPanel');
+    if (connected) {
+        var message_out = {
+            "info": "chat_close",
+            "client_id": id_client,
+            "widget_id": LIRAX.widgetOptions.token
+        };
+
+        lira_log("Отправлены данные: " + JSON.stringify(message_out),4);
+        socket.send(JSON.stringify(message_out));
+    }
+    chat_closed = true;
+    chat_open = "0";
+    setCookieToMidnightLirax('lirax_chat_open', chat_open);
+    enable_scroll();
+});
+// Отработка кликов по кнопкам
+jQuery('#liraWidget [data-action]').click(function(e){
+        e.preventDefault();
+
+            var target = jQuery(e.currentTarget),
+                widget = target.closest('#liraWidget'),
+                phone = jQuery('#lirax-widget-phone-number'),
+                body = jQuery('body'),
+                phoneVal = phone.val(),
+                panel = jQuery('#liraPanel'),
+                panelCallback = panel.find('.lirax-callback-wrap'),
+                panelChat = panel.find('.lirax-chat-wrap'),
+                action = target.data('action');
+                //informer = $('.lira-informer');
+                lira_log(action,4);
+                var message_out;
+            switch(action){
+                // Показать виджет обратного звонка
+                case 'showliraCallback':
+                    if (LIRACRM.widgetOptions.isWorkTime() || panel.hasClass('showCallBackPanel')) {
+                        //body.removeClass('lira-open');
+                        widget.toggleClass('showCallBackPanel');
+                        if (widgetOpened == 1) {
+                            widgetOpened = 0;
+                        } else {
+                            widgetOpened = 1;
+                        }
+                        //console.log(widgetOpened);
+                        if (widget.hasClass('showChatPanel')) {
+                            widget.removeClass('showChatPanel');
+                            if (connected) {
+                                message_out = {
+                                    "info": "chat_close",
+                                    "client_id": id_client,
+                                    "widget_id": LIRAX.widgetOptions.token
+                                };
+
+                                lira_log("Отправлены данные: " + JSON.stringify(message_out),4);
+                                socket.send(JSON.stringify(message_out));
+                            }
+                            chat_closed = true;
+                            chat_open = "0";
+                            setCookieToMidnightLirax('lirax_chat_open', chat_open);
+                        }
+                        if (informer.hasClass('lirax-informer-close')) {
+                            informer.removeClass('lirax-user-connect');
+                            informer.removeClass('lirax-informer-close');
+                            jQuery('.lirax-callback-wrap').removeClass('timerStart');
+                        }
+                        if (!informer.hasClass('lirax-informer-show')) {
+                            panel.toggleClass('showCallBackPanel');
+                        } else {
+                            informer.toggleClass('lirax-informer-hide');
+                        }
+                        if (panel.hasClass('showChatPanel')) {
+                            panel.removeClass('showChatPanel');
+                        }
+                        break;
+                    } else {
+                        LIRACRM.showWidget();
+                        break;
+                    }
+                    break;
+                // Показать онлайн чат
+                case 'showliraChat':
+                    if (!LIRACRM.widgetOptions.isWorkTime()) {
+                        lira_log('callback is not work time',4);
+                        jQuery('#lirax-chat-userpic img').attr('src', '');
+                        jQuery('#lirax-chat-userpic img').hide();
+                        jQuery('#lirax-chat-usertitle').text(LIRACRM.widgetOptions.chat_header_open_offline);
+                        jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_subheader_open_offline);
+                        if (chatGreetingOffline == "1") {
+                            sendMessage(LIRACRM.widgetOptions.chat_greeting_offline, true, false, true);
+                            chatGreetingOffline = "0";
+                            //askDefault = 1;
+                            //chat_show_greeting = "0";
+                            setCookieToMidnightLirax('lirax_chat_show_greeting_offline', chatGreetingOffline);
+                        }
+                        if (chat_show_greeting == "0" && askDefault) {
+                            askDefault = false;
+                            chat_show_greeting = "1";
+                            setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+                        }
+                    }
+                    /*if (panel.hasClass('showChatPanel')) {
+                        body.removeClass('lira-open');
+                    } else {
+                        body.addClass('lira-open');
+                    }*/
+                    widget.toggleClass('showChatPanel');
+                    if(widget.hasClass('showCallBackPanel')) {
+                        widget.removeClass('showCallBackPanel');
+                    }
+                    panel.toggleClass('showChatPanel');
+                    if(panel.hasClass('showCallBackPanel') && !informer.hasClass('lirax-informer-show')) {
+                        panel.removeClass('showCallBackPanel');
+                    } else {
+                        if (LIRACRM.widgetOptions.widgetShow) {
+                            if (!informer.hasClass('lirax-informer-hide')) {
+                                informer.addClass('lirax-informer-hide');
+                            }
+                        }
+                    }
+                    if (chat_closed) {
+                        if (connected) {
+                            message_out = {
+                                "info": "chat_open",
+                                "client_id": id_client,
+                                "widget_id": LIRAX.widgetOptions.token
+                            };
+
+                            lira_log("Отправлены данные: " + JSON.stringify(message_out),4);
+                            socket.send(JSON.stringify(message_out));
+                        }
+                        chat_closed = false;
+                        chat_open = "1";
+                        setCookieToMidnightLirax('lirax_chat_open', chat_open);
+                        if (!askDefault && connected) {
+                            if (LIRACRM.widgetOptions.isWorkTime() && chat_show_greeting == "1") {
+                                jQuery('#lirax-chat-usertitle').text(LIRACRM.widgetOptions.chat_header_open_online);
+                                jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_subheader_open_online);
+                                sendMessage(LIRACRM.widgetOptions.chat_greeting_online, true, false, true);
+                                chat_show_greeting = "0";
+                                setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+                                if (chatGreetingOffline == "0") {
+                                    chatGreetingOffline = "1";
+                                    setCookieToMidnightLirax('lirax_chat_show_greeting_offline', chatGreetingOffline);
+                                }
+                                askDefault = true;
+                            }
+                        }
+                    } else {
+                        if (connected) {
+                            message_out = {
+                                "info": "chat_close",
+                                "client_id": id_client,
+                                "widget_id": LIRAX.widgetOptions.token
+                            };
+
+                            lira_log("Отправлены данные: " + JSON.stringify(message_out),4);
+                            socket.send(JSON.stringify(message_out));
+                        }
+                        chat_closed = true;
+                        chat_open = "0";
+                        setCookieToMidnightLirax('lirax_chat_open', chat_open);
+                        enable_scroll();
+                    }
+                    break;
+            }
+
+});
+
+var startX, startY, startWidth, startHeight;
+
+function initDrag(e) {
+    //supportwidgetContainer.style.transition = 'none';
+    e.preventDefault();
+    startX = e.clientX;
+    startY = e.clientY;
+    if (LIRACRM.widgetOptions.placeLeft) {
+       startWidth = parseInt(document.defaultView.getComputedStyle(wc).left, 10);
+    } 
+    if (LIRACRM.widgetOptions.placeRight) {
+        startWidth = parseInt(document.defaultView.getComputedStyle(wc).right, 10);
+    } 
+    startHeight = parseInt(document.defaultView.getComputedStyle(wc).height, 10);
+    document.documentElement.addEventListener('mousemove', doDrag);
+    document.documentElement.addEventListener('mouseup', stopDrag);
+
+}
+
+function doDrag(e) {
+   e.preventDefault();
+   if ((startHeight - e.clientY + startY)<350) {
+       wc.style.height = lirachat_move_height = '350px';
+   } else if ((startHeight - e.clientY + startY)>(jQuery(window).height())) {
+
+   } else {
+       wc.style.height = lirachat_move_height = (startHeight - e.clientY + startY) + 'px';
+   }
+    if (LIRACRM.widgetOptions.placeLeft) {
+       if ((startWidth + e.clientX - startX)<0) {
+            wc.style.left = lirachat_move_right = '0px';
+        } else if ((startWidth + e.clientX - startX)>(jQuery(window).width()-345)) {
+            wc.style.left = lirachat_move_right = (jQuery(window).width()-345) + 'px';
+        } else {
+            wc.style.left = lirachat_move_right = (startWidth + e.clientX - startX) + 'px';
+        }
+    } 
+    if (LIRACRM.widgetOptions.placeRight) {
+         if ((startWidth - e.clientX + startX)<0) {
+            wc.style.right = lirachat_move_right = '0px';
+        } else if ((startWidth - e.clientX + startX)>(jQuery(window).width()-345)) {
+            wc.style.right = lirachat_move_right = (jQuery(window).width()-345) + 'px';
+        } else {
+            wc.style.right = lirachat_move_right = (startWidth - e.clientX + startX) + 'px';
+        }
+    }
+
+   //console.log('lirachat_move_right',lirachat_move_right);
+   //setCookieLirax('lirax_chat_move_height', lirachat_move_height, 3650);
+   //setCookieLirax('lirax_chat_move_right', lirachat_move_right, 3650);
+}
+
+function stopDrag(e) {
+    document.documentElement.removeEventListener('mousemove', doDrag, false);    document.documentElement.removeEventListener('mouseup', stopDrag, false);
+}
+
+function dotsAnimation(){
+    var dot = '.',
+            block = jQuery('.lirax-informer .dots-animation');
+            newDot = block.filter(':first').text();
+
+    dotsA = setTimeout(function(){
+            if (block.filter(':first').text().length != 3){
+                    newDot = newDot + dot;
+                    block.text(newDot);
+            } else {
+                    block.text('');
+            }
+            dotsAnimation();
+    },300);
+}
+
+function startTimerA() {
+    var count = 29;
+    var timer = jQuery('#liraTimer');
+    var widget = jQuery('#liraWidget');
+    timerA = function () {callTimer = setTimeout(function(){
+            if (count<10) {
+                timer.text('0'+count);
+            } else {
+                timer.text(count);
+            }
+            if (count == 0) {
+                /*setTimeout(function(){
+                    $('.lira-callback-wrap').removeClass('timerStart');
+                    $('.lira-informer').removeClass('lira-user-connect');
+                    messageErrorConnect = 'Соединение<br> с оператором<span class="dots-animation"></span>';
+                    $('.lira-informer-connection').html(messageErrorConnect);
+                },3000);*/
+                if (connected) {
+                    var message_out = {
+                        "info": "timeout"
+                    };
+                    socket.send(JSON.stringify(message_out));
+                    lira_log('отправлены данные: ', JSON.stringify(message_out),4);
+                }
+            } else {
+                count--;
+                timerA();
+            }
+        },1000);
+    };
+    timerA();
+}
+
+function secondsCounter(){
+    var liraWatch = jQuery('#liraWatch'),
+        min = parseInt(liraWatch.find('.l-min').text()),
+        sec = parseInt(liraWatch.find('.l-sec').text());
+        sec++;
+    secondsA = setTimeout(function(){
+        if (sec < 10)
+                sec = '0'+ sec;
+
+        if (sec == 60){
+                sec = '00';
+                min++;
+                if (min < 10)
+                        min = '0'+ min;
+                liraWatch.find('.l-min').text(min);
+        }
+        liraWatch.find('.l-sec').text(sec);
+        secondsCounter();
+    }, 1000);
+}
+
+function callBackDefault(){
+        jQuery('.timerStart').removeClass('timerStart');
+        jQuery('#liraPanel').removeClass().addClass('lirax-widget-panel'+widgetPlaceClass).find('.lirax-informer').removeClass().addClass('lirax-informer');
+        jQuery('#liraWidget').removeClass().addClass('lirax-widget'+widgetPlaceClass+' lirax-widget-wrap');
+        jQuery('#liraUserStatus .lirax-user-status-text').text(LIRACRM.widgetOptions.callback_text_already_call);
+        jQuery('#liraUserStatus .dots-animation').show();
+        jQuery('#liraWatch > span').text('00');
+        clearTimeout(dotsA);
+        clearTimeout(timerA);
+        jQuery('#liraTimer').text(30);
+        clearVoted();
+}
+
+function clearVoted(){
+        var target = jQuery('#liraPanel').find('.lirax-informer-rating');
+        target.removeClass('lirax-voted').find('.active').removeClass('active');
+}
+
+function phoneInputValidate(e) {
+    //console.log(this.value.length);
+    var buttonSubmit = document.getElementById('formCallBackSubmit');
+    var value = this.value;
+    var baz = "^\\+("+LIRACRM.widgetOptions.defaultPrefix+")$";
+    var filter = new RegExp(baz);
+    if ((e.keyCode == '8' && (filter.test(value))) || (!/[0-9]{1}/.test(e.key) && (e.keyCode != '8' && e.keyCode != '13' && !(e.ctrlKey && e.keyCode=='86')))) {
+        e.preventDefault();
+        return false;
+    } else if (e.keyCode == '13' && this.value.length > 12)  {
+        var callbackphone = jQuery('#lirax-widget-phone-number').val().replace(/ /g, '');
+
+        jQuery('.lirax-callback-wrap').removeClass('timerStart');
+        jQuery('.lirax-informer').removeClass('lirax-user-connect');
+        messageErrorConnect = LIRACRM.widgetOptions.callback_text_connection+'<span class="dots-animation"></span>';
+        jQuery('.lirax-informer-connection').html(messageErrorConnect);
+        jQuery('.lirax-informer-timer').show();
+        jQuery('#liraTimer').text('30');
+
+        jQuery('.lirax-callback-wrap').addClass('timerStart');
+        jQuery('#liraWidget').addClass('showCallBackPanel');
+        if (jQuery('.lirax-informer').hasClass('lirax-informer-hide')) {
+            jQuery('.lirax-informer').removeClass('lirax-informer-hide');
+        }
+        jQuery('.lirax-informer').addClass('lirax-user-connect lirax-informer-show');
+        dotsAnimation();
+        startTimerA();
+        if (connected) {
+            var message_out = {
+                "info": "callback_phone",
+                "msg_values": {
+                    "text": callbackphone,
+                    "current_url":location.href
+                }
+            };
+            socket.send(JSON.stringify(message_out));
+            lira_log('отправлены данные: '+JSON.stringify(message_out),4);
+        }
+    } else {
+        var baz1 = "^(\\+"+LIRACRM.widgetOptions.defaultPrefix+")$";
+        var filter1 = new RegExp(baz1);
+        if ((filter1.test(value))) {
+            this.value += '';
+        }
+        /*if ((/^(\+380)\s[0-9]{2}$/.test(value)) && (e.keyCode != '8')) {
+            this.value += ' ';
+        }
+        if ((/^(\+380)\s[0-9]{2}\s[0-9]{3}$/.test(value)) && (e.keyCode != '8')) {
+            this.value += ' ';
+        }
+        if ((/^(\+380)\s[0-9]{2}\s[0-9]{3}\s[0-9]{2}$/.test(value)) && (e.keyCode != '8')) {
+            this.value += ' ';
+        }*/
+    }
+
+}
+
+function phoneInputValidateKeyup(e) {
+    var buttonSubmit = document.getElementById('formCallBackSubmit');
+    //console.log(this.value.length);
+    if (this.value.length === 0) {
+        this.value = '+'+LIRACRM.widgetOptions.defaultPrefix;
+    }
+    if (this.value.length > 12 && (e.keyCode != '8' && e.keyCode != '13')) {
+            buttonSubmit.disabled = '';
+            //console.log('enabled');
+        } else if(e.keyCode != '13') {
+            buttonSubmit.disabled = 'disabled';
+            //console.log('disabled');
+        }
+}
+
+function phoneInputValidatePaste(e) {
+    e.preventDefault();
+    var buttonSubmit = document.getElementById('formCallBackSubmit');
+    
+    var valuePaste = (e.originalEvent || e).clipboardData.getData('text');
+    lira_log('value '+valuePaste,4);
+    valuePaste = valuePaste.replace(/^(\+?380)/, '');
+    lira_log('value '+valuePaste,4);
+    if (!/^[\+,0-9]+$/.test(valuePaste)) {
+        
+        return false;
+    } else if (!/[0-9]{1,9}/.test(valuePaste)) {
+        
+        return false;
+    } else if (valuePaste.length >=9) {
+            buttonSubmit.disabled = '';
+            this.value = '+'+LIRACRM.widgetOptions.defaultPrefix+valuePaste;
+    } else {
+        lira_log('value '+valuePaste,4);
+        this.value = '+'+LIRACRM.widgetOptions.defaultPrefix+valuePaste;
+        //return value;
+    }
+    
+}
+
+//get date diff
+function dateDiffInDays(a, b) {
+    var _MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+    // Discard the time and time-zone information.
+    var utc1 = a.getTime();
+    var utc2 = b.getTime();
+
+    return ((utc2 - utc1) / _MS_PER_DAY);
+}
+
+// Add message to local storage
+function addMessageToHistory(message, usertype, username) {
+    var allIndexes = getLocalStorageAllIndexes();
+    var maxIndex = getMax(allIndexes);
+    var date = new Date();
+    var dateString = date.toString();
+    var historyObj = { "usertype":usertype,"message":message,"username":username,"date":dateString };
+    if (allIndexes.length == 0 ) {
+        localStorage.setItem('lirax_0',JSON.stringify(historyObj));
+    } else {
+        localStorage.setItem('lirax_'+(maxIndex+1),JSON.stringify(historyObj));
+    }
+    clearChatHistory();
+}
+
+function getLocalStorageAllIndexes(){
+    var allIndexes = [];
+    for (var f = 0; f < localStorage.length; f++) {
+        var keyword = localStorage.key(f);
+        if (keyword.indexOf('lirax_') !== -1) allIndexes.push(parseInt(keyword.substring(6)));
+    }
+    return allIndexes;
+}
+
+function getMin(array){
+    return Math.min.apply(Math,array);
+}
+
+function getMax(array){
+    return Math.max.apply(Math,array);
+}
+
+function clearChatHistory(){
+    var allIndexes = getLocalStorageAllIndexes();
+    var minIndex = getMin(allIndexes);
+    var maxIndex = getMax(allIndexes);
+    var storegaitem0 = JSON.parse(localStorage.getItem('lirax_'+minIndex));
+    var dateParse0 = new Date(storegaitem0.date);
+    var storegaitem1 = JSON.parse(localStorage.getItem('lirax_'+maxIndex));
+    var dateParse1 = new Date(storegaitem1.date);
+    var diffHistory = dateDiffInDays(dateParse0, dateParse1);
+    if (diffHistory>30) localStorage.removeItem('lirax_'+minIndex);
+    lira_log('diffHistory: '+diffHistory,4);
+}
+
+function clearAllChatHistory(){
+    var allIndexes = getLocalStorageAllIndexes();
+    var minIndex = getMin(allIndexes);
+    var maxIndex = getMax(allIndexes);
+    lira_log('allIndexes '+allIndexes,4);
+    if (localStorage.length > 0 ) {
+        for (var f = minIndex; f <= maxIndex; f++) {
+            var value = JSON.parse(localStorage.getItem('lirax_'+f));
+            lira_log('f '+f,4);
+            lira_log('localstorage keyword '+'lirax_'+f,4);
+            lira_log('localstorage value '+value,4);
+            if (value !=undefined && value !=null) {
+                lira_log('remove item',4);
+                localStorage.removeItem('lirax_'+f);
+            }
+        }
+    }
+}
+
+//add local history to chat
+function addLocalHistoryToChat() {
+    var allIndexes = getLocalStorageAllIndexes();
+    var minIndex = getMin(allIndexes);
+    var maxIndex = getMax(allIndexes);
+    var nextDay = 1,keywordPrev='',historyDateDiff=60001,newP,dateParsePrev,userPrevType;
+    var newDiv, prevSendMonth, prevSendDay;
+    if (localStorage.length >0 ) {
+        for (var f = minIndex; f <= maxIndex; f++) {
+            var keyword = localStorage.key('lirax_'+f);
+            var value = JSON.parse(localStorage.getItem('lirax_'+f));
+            if (value) {
+                var userType = value.usertype;
+                if (f>minIndex) {
+                    keywordPrev = localStorage.key('lirax_'+(f-1));
+                    var valuePrev = JSON.parse(localStorage.getItem('lirax_'+(f-1)));
+                    if (valuePrev) {
+                        userPrevType = valuePrev.usertype;
+                        dateParsePrev = new Date(valuePrev.date);
+                        prevSendMonth = dateParsePrev.getMonth();
+                        prevSendDay = dateParsePrev.getDate();
+                    }
+                }
+                var dateParse = new Date(value.date);
+
+                if (dateParse != 'Invalid Date') {
+                    var sendTime = new Date();
+                    var sendMonth = sendTime.getMonth();
+                    var sendYear = sendTime.getYear();
+                    var sendDate = sendTime.getDate();
+                    var lastSendMonth = dateParse.getMonth();
+                    var lastSendDay = dateParse.getDate();
+
+                    if (keywordPrev !='' && dateParsePrev !='Invalid Date') {
+                        if (prevSendMonth == lastSendMonth && prevSendDay == lastSendDay){
+                            nextDay = 0;
+                        } else {
+                            nextDay = 1;
+                        }
+                        historyDateDiff = dateParse - dateParsePrev;
+                    }
+                    prevSendMonth = dateParse.getMonth();
+                    prevSendDay = dateParse.getDate();
+                    var time = addZero(dateParse.getHours())+':'+addZero(dateParse.getMinutes());
+                    var options = {
+                        //era: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        //weekday: 'long',
+                        //timezone: 'UTC',
+                        //hour: 'numeric',
+                        //minute: 'numeric',
+                        //second: 'numeric'
+                    };
+                    if (nextDay == 1) {
+                        if (sendMonth == lastSendMonth && sendDate == lastSendDay){
+                                template = '<div class="lirax-chat-date-message">'+LIRACRM.widgetOptions.chat_text_today+'</div>';
+                                lastDateMessage = new Date(sendYear,sendMonth,sendDate);
+                        } else {
+                                template = '<div class="lirax-chat-date-message">'+dateParse.toLocaleString("ru", options)+'</div>';
+                        }
+                        template += '<div class="lirax-chat-message-' + value.usertype + '">'+
+                                        '<div class="lirax-chat-message-text"><p>' + value.message.replace(/\n/g, '<br />') + '</p></div>'+
+                                        '<div class="lirax-chat-message-time">' + time + '</div>'+
+                                     '</div>';
+                        newDiv = document.createElement('div');
+                        newDiv.classList.add("lirax-chat-message-wrap");
+                        newDiv.innerHTML = template;
+                        subArea.appendChild(newDiv);
+                        nextDay = 0;
+                    } else {
+                        /*if (historyDateDiff < 60000 && userType == userPrevType) {
+                                var lastMessageBlock = subArea.lastElementChild.lastElementChild.firstElementChild;
+                                newP = document.createElement('p');
+                                newP.innerHTML = value.message;
+                                lastMessageBlock.appendChild(newP);
+                        } else {
+                            
+                        }*/
+                        template = '<div class="lirax-chat-date-message"></div>';
+                        template += '<div class="lirax-chat-message-' + value.usertype + '">'+
+                                        '<div class="lirax-chat-message-text"><p>' + value.message.replace(/\n/g, '<br />') + '</p></div>'+
+                                        '<div class="lirax-chat-message-time">' + time + '</div>'+
+                                     '</div>';
+                        newDiv = document.createElement('div');
+                        newDiv.classList.add("lirax-chat-message-wrap");
+                        newDiv.innerHTML = template;
+                        subArea.appendChild(newDiv);
+                    }
+
+                }
+            }    
+        }
+        scrollDownChat();
+    }
+}
+
+// Скролит историю чата вверх
+function scrollDownChat(){
+        var size = subArea.offsetHeight;
+        area.scrollTop = size;
+}
+
+// добавляем 0 ко времени
+function addZero(n) {
+    return n < 10 ? '0' + n : n;
+}
+
+// Получаем текущее время
+function returnTime(){
+        var date = new Date();
+        hours = addZero(date.getHours());
+        minutes = addZero(date.getMinutes());
+        var time = hours + ':' + minutes;
+        return time;
+}
+
+// Проверка разрыва времени между текущими сообщениями
+function trigerTimeChanger(){
+        var sendTime = new Date(),
+                diff = sendTime - loadTime;
+        loadTime = sendTime;
+        return diff;
+}
+
+// Проверка разрыва времени между последними сообщениями
+function dateChanadd(){
+        var sendTime = new Date(),
+                sendMonth = sendTime.getMonth(),
+                sendYear = sendTime.getYear(),
+                sendDate = sendTime.getDate(),
+                lastSendMonth = lastDateMessage.getMonth(),
+                lastSendDay = lastDateMessage.getDate();
+
+                if (sendMonth != lastSendMonth || sendDate != lastSendDay){
+                        template = '<div class="lirax-chat-date-message">'+LIRACRM.widgetOptions.chat_text_today+'</div>';
+                        lastDateMessage = new Date(sendYear,sendMonth,sendDate);
+                } else {
+                        template = '';
+                }
+        loadTime = sendTime;
+        return template;
+}
+
+//Функция добавления сообщений в дерево
+function sendMessage(message,num,viewed,savetohistory){
+    var template, user, newDiv, newDay, time, diff, new_client_dialog;
+    lira_log('savetohistory '+savetohistory,4);
+    savetohistory = savetohistory != 'undefined' ? savetohistory : true;
+    lira_log('savetohistory '+savetohistory,4);
+    time = returnTime();
+    diff = trigerTimeChanger();
+    newDay = dateChanadd();
+    if (num == true) { user = 'operator'; } else { user = 'client'; }
+    if (connected) {
+        new_client_dialog = jQuery(".lirax-chat-message-client").length;
+        if (savetohistory) addMessageToHistory(message, user, name);
+        /*if (triger == num && diff <= 60000 && newDay == '') {
+                var lastMessageBlock = subArea.lastElementChild.lastElementChild.firstElementChild;
+                newP = document.createElement('p');
+                newP.innerHTML = message;
+                lastMessageBlock.appendChild(newP);
+        } else {
+                
+        }*/
+        template = newDay + '<div class="lirax-chat-message-' + user + '">'+
+                                '<div class="lirax-chat-message-text"><p>' + message.replace(/\n/g, '<br />'); + '</p></div>'+
+                                '<div class="lirax-chat-message-time">' + time + '</div>' + '</div>';
+        newDiv = document.createElement('div');
+        newDiv.classList.add("lirax-chat-message-wrap");
+        newDiv.innerHTML = template;
+        subArea.appendChild(newDiv);
+        if (!num) {
+            var message_out = {
+                "info": "web_new_message_client",
+                "msg_values": {
+                    "client_id": id_client,
+                    "widget_id": LIRAX.widgetOptions.token,
+                    "text": message
+                }
+            };
+            socket.send(JSON.stringify(message_out));
+            lira_log('отправлены данные: '+JSON.stringify(message_out),4);
+            textArea.value = '';
+        } 
+        if (num && viewed) {
+            /*if (connected) {
+                var message_out = {
+                    "info": "message_viewed"
+                };
+                socket.send(JSON.stringify(message_out));
+                console.log('отправлены данные: ', JSON.stringify(message_out));
+            }*/
+        }
+        triger = num;
+        scrollDownChat();
+    }
+}
+
+function checkConnection() {
+    var connectionTime = new Date();
+    var diff = connectionTime - checkTime;
+    lira_log('diff '+diff,4);
+    if (diff>12000 && checkOneReconect==0) {
+        checkOneReconect = 1;
+        clearTimeout(myInterval);
+        lira_log('socket '+socket,4);
+        lira_log('connected '+connected,4);
+        if (socket && connected) {
+            socket.close();
+            reconnectSocket();
+        } else {
+            socket.close();
+            reconnectSocket();
+        }
+        if (LIRACRM.widgetOptions.chatShow) {
+            jQuery('#lirax-chat-usertitle').text(LIRACRM.widgetOptions.chat_lost_connect);
+            jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_lost_reconnect);
+        }
+        if (LIRACRM.widgetOptions.widgetShow) {
+            messageErrorConnect = LIRACRM.widgetOptions.callback_text_lost_connect;
+            jQuery('.lirax-informer-connection').html(messageErrorConnect);
+            if (jQuery('#liraPanel').hasClass('showCallBackPanel')) {
+                jQuery('.lirax-callback-wrap').addClass('timerStart');
+                jQuery('.lirax-informer-connection').html(messageErrorConnect);
+                jQuery('.lirax-informer-timer').hide();
+                jQuery('.lirax-informer').removeClass('lirax-user-connected');
+                jQuery('.lirax-informer').addClass('lirax-user-connect lirax-informer-show lirax-informer-show');
+            } else {
+                jQuery('#liraPanel').addClass('showCallBackPanel');
+                jQuery('.lirax-callback-wrap').addClass('timerStart');
+                jQuery('.lirax-informer-connection').html(messageErrorConnect);
+                jQuery('.lirax-informer-timer').hide();
+                jQuery('.lirax-informer').removeClass('lirax-user-connected');
+                jQuery('.lirax-informer').addClass('lirax-user-connect lirax-informer-show lirax-informer-hide');
+            }
+        }            
+    }
+}
+
+function reconnectSocket() {
+    google_info = {
+        "ip":ip,
+        "hostname":hostname,
+        "sbsrc":sbsrc,
+        "sbmdm":sbmdm,
+        "sbcmp":sbcmp,
+        "sbtrm":sbtrm,
+        "id_client":id_client,
+        "widget_id":LIRAX.widgetOptions.token,
+        "ga_client_id":LIRAX.ga.getClientId(),
+        "ga_site_id":LIRAX.ga.getTrackingId(),
+        "reason":lirax_chat_greating_reason,
+        "roistat_visit":roistat_visit,
+        "is_work_time": LIRACRM.serverIsWorkTime
+    };
+    if (timeOut==2000) {
+        lira_log('timeOut '+timeOut,4);
+        setTimeout(function(){startSocket(google_info);}, timeOut);
+        timeOut=3000;
+    } else if (timeOut==3000) {
+        lira_log('timeOut '+timeOut,4);
+        setTimeout(function(){startSocket(google_info);}, timeOut);
+        timeOut=10000;
+    } else if (timeOut==10000) {
+        lira_log('timeOut '+timeOut,4);
+        setTimeout(function(){startSocket(google_info);}, timeOut);
+        timeOut=0;
+    } else {
+        lira_log('timeOut '+timeOut,4);
+        lira_log('Сервер не доступен. Проверте соединение с интернетом и перезагрузите страницу.',4);
+
+        if (LIRACRM.widgetOptions.widgetShow) {
+            messageErrorConnect = LIRACRM.widgetOptions.callback_text_lost_reload;
+            if (jQuery('#liraPanel').hasClass('showCallBackPanel')) {
+                jQuery('.lirax-callback-wrap').addClass('timerStart');
+                jQuery('.lirax-informer-connection').html(messageErrorConnect);
+                jQuery('.lirax-informer-timer').hide();
+                jQuery('.lirax-informer').removeClass('lirax-user-connected');
+                jQuery('.lirax-informer').addClass('lirax-user-connect lirax-informer-show lirax-informer-show');
+            } else {
+                jQuery('#liraPanel').addClass('showCallBackPanel');
+                jQuery('.lirax-callback-wrap').addClass('timerStart');
+                jQuery('.lirax-informer-connection').html(messageErrorConnect);
+                jQuery('.lirax-informer-timer').hide();
+                jQuery('.lirax-informer').removeClass('lirax-user-connected');
+                jQuery('.lirax-informer').addClass('lirax-user-connect lirax-informer-show lirax-informer-hide');
+            }
+        } 
+
+        if (LIRACRM.widgetOptions.chatShow) {
+            jQuery('#lirax-chat-usertitle').text(LIRACRM.widgetOptions.chat_lost_connect);
+            jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_lost_reload);
+        }
+    }
+    return false;
+}
+
+function closeSocket() {
+    if (socket) {
+            socket.close();
+    }
+}
+
+function startSocket(info) {
+    socketInfo = info;
+    socket = new WebSocket(socketUrl);
+
+    var widget = jQuery('#liraWidget');
+    var message_out;
+
+    socket.onopen = function() {
+        connected = 1;
+
+        lira_log('Соединение установлено',4);
+
+        checkOneReconect = 0;
+        timeOut = 2000;
+        checkTime = new Date();
+        setTimeout(function () {
+            checkConnection();
+            if (checkOneReconect == 0) {
+                myInterval = setTimeout(arguments.callee, 12000);
+            } 
+
+          }, 12000);
+
+        if (info.id_client == "underfine") {
+            message_out = {
+                "connect": {
+                    "ip":info.ip,
+                    "hostname":info.hostname,
+                    "utm_source":info.sbsrc,
+                    "utm_medium":info.sbmdm,
+                    "utm_campaign":info.sbcmp,
+                    "utm_term":info.sbtrm,
+                    "widget_id": LIRAX.ctOptions.token, // info.widget_id, //*
+                    "ga_client_id":info.ga_client_id,
+                    "ga_site_id":info.ga_site_id,
+                    "reason":info.reason,
+                    "roistat_visit":info.roistat_visit,
+                    "is_work_time": info.is_work_time,
+                    "hidden": 1
+                }
+            };
+        } else {
+            message_out = {
+                "connect": {
+                    "ip":info.ip,
+                    "hostname":info.hostname,
+                    "utm_source":info.sbsrc,
+                    "utm_medium":info.sbmdm,
+                    "utm_campaign":info.sbcmp,
+                    "utm_term":info.sbtrm,
+                    "client":info.id_client,
+                    "widget_id":LIRAX.ctOptions.token, // info.widget_id,
+                    "ga_client_id":info.ga_client_id,
+                    "ga_site_id":info.ga_site_id,
+                    "reason":info.reason,
+                    "roistat_visit":info.roistat_visit,
+                    "is_work_time": info.is_work_time,
+                    "hidden": 1
+                }
+            };
+        }
+        
+        socket.send(JSON.stringify(message_out));
+        lira_log('отправлены данные: '+JSON.stringify(message_out),4);
+        
+        if (LIRACRM.widgetOptions.chatShow) {
+            jQuery('#lirax-chat-usertitle').text(chat_manager_name);
+            jQuery('#lirax-chat-usersubtitle').text(chat_manager_subname);
+        }
+        if (LIRACRM.widgetOptions.widgetShow) {
+            if (jQuery('.lirax-informer').hasClass('lirax-user-connect')) {
+                jQuery('.lirax-callback-wrap').removeClass('timerStart');
+                jQuery('.lirax-informer-timer').show();
+                jQuery('.lirax-informer').removeClass().addClass('lirax-informer');
+                if (jQuery('#liraPanel').hasClass('showCallBackPanel')) {
+                    jQuery('#liraPanel').removeClass('showCallBackPanel');
+                    jQuery('#liraWidget').removeClass('showCallBackPanel');
+                }
+            }
+        }
+    };
+
+    socket.onclose = function(event) {
+        connected = 0;
+        lira_log('Соединение закрыто '+event,4);
+
+    };
+
+    socket.onerror = function(error) {
+        lira_log("Ошибка " + error.message,4);
+        connected = 0;
+        if (checkOneReconect == 1) {
+            reconnectSocket();
+        }
+    };
+
+    socket.onmessage = function(event) {
+        
+        if (connected == 0) {
+            connected = 1;
+        }
+
+        checkTime = new Date();
+
+        lira_log('Получены данные ' + event.data,4);
+
+        var message_in = JSON.parse(event.data);
+
+        if (LIRACRM.widgetOptions.chatShow) {
+
+            if (message_in.msg_type == 'chat') {
+
+                if (message_in.msg_values.name != undefined && message_in.msg_values.message_typing != "typing") {
+
+                    //if ($('#lirax-chat-usertitle').text() != message_in.msg_values.name) {
+                        //console.log('show name and avatar');
+                        if (message_in.msg_values.name != '') {
+                            if (message_in.msg_values.avatar != '') {
+                                jQuery('#lirax-chat-userpic img').show();
+                                jQuery('#lirax-chat-userpic img').attr('src', message_in.msg_values.avatar);
+                                setCookieToMidnightLirax('lirax_chat_manager_avatar', message_in.msg_values.avatar);
+                            }
+
+                            jQuery('#lirax-chat-usertitle').text(message_in.msg_values.name);
+                            jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_operator_usersubtitle);
+                            
+                            setCookieToMidnightLirax('lirax_chat_manager_name', message_in.msg_values.name);
+                            setCookieToMidnightLirax('lirax_chat_manager_subname', LIRACRM.widgetOptions.chat_operator_usersubtitle);
+                        }
+                    //}
+                    
+                    var message_show = message_in.msg_values.text;
+                    var saveToHistory = parseInt(message_in.msg_values.save_to_history);
+                    if (message_show != '') {
+                        sendMessage(message_show, true, true, saveToHistory);
+                        if (saveToHistory == '1') {
+                            chat_show_greeting = "0";
+                            setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+                        } else {
+                            askDefault = true;
+                        }
+                        document.getElementById('chat_new_message_sound').volume = 0.2;
+                        document.getElementById('chat_new_message_sound').play();
+                        scrollDownChat();
+                        if (chat_closed) {
+                            if (jQuery('#liraPanel').hasClass('showCallBackPanel') && !jQuery('.lirax-informer').hasClass('lirax-informer-show')) {
+                                    jQuery('#liraPanel').removeClass('showCallBackPanel');
+                                    jQuery('#liraPanel').addClass('showChatPanel');
+                                    jQuery('#liraWidget').removeClass('showCallBackPanel');
+                                    jQuery('#liraWidget').addClass('showChatPanel');
+                                    
+                            } else {
+                                if (jQuery('.lirax-informer').hasClass('lirax-informer-show')) {
+                                    jQuery('.lirax-informer').addClass('lirax-informer-hide');
+                                    jQuery('#liraPanel').addClass('showCallBackPanel showChatPanel');
+                                    jQuery('#liraWidget').removeClass('showCallBackPanel');
+                                    jQuery('#liraWidget').addClass('showChatPanel');
+                                } else {
+                                    jQuery('#liraPanel').addClass('showChatPanel');
+                                    jQuery('#liraWidget').addClass('showChatPanel');
+                                }
+                                
+                            }
+                            chat_closed = false;
+                            chat_open = "1";
+                            setCookieToMidnightLirax('lirax_chat_open', chat_open);
+                        }
+                        check_operator_status = "1";
+                    }
+                }
+                if (message_in.msg_values.hello) {
+                    if (message_in.msg_values.operator_online == 1) {
+                        //$('#lirax-chat-usertitle').text('Напишите нам!');
+                        //$('#lirax-chat-usersubtitle').text('Мы онлайн!');
+                    } else {
+                        //$('#lirax-chat-usertitle').text('Нет свободных операторов!');
+                        //$('#lirax-chat-usersubtitle').text('Мы ответим на Ваше сообщение как можно скорее!');
+                    }
+
+                }
+                if (message_in.msg_values.message_typing == "typing") {
+                    var lira_typing = document.getElementById("lirax-service-message");
+                    lira_typing.className = 'img-typing';
+                    lira_typing.textContent = LIRACRM.widgetOptions.chat_operator_typing;
+                    setTimeout(function(){
+                        document.getElementById("lirax-service-message").textContent = "";
+                        document.getElementById("lirax-service-message").className = "";
+                    }, 3000);  // 3 seconds
+                }
+                
+                if (message_in.msg_values.reason && message_in.msg_values.reason == "1") {
+                    setCookieToMidnightLirax('lirax_chat_greating_reason', "1");
+                }
+            }
+
+        }
+
+        if (LIRACRM.widgetOptions.widgetShow) {
+
+            if (message_in.msg_type === 'callback' && LIRACRM.widgetOptions.isWorkTime()) {
+                if (message_in.msg_values.status === 'operator_calling') {
+                    informer.removeClass().addClass('lirax-informer lirax-user-connected lirax-informer-show');
+                    widget.addClass('showCallBackPanel');
+                    jQuery('#liraUserName').text(message_in.msg_values.name);
+                    jQuery('#liraUserPic').html('<img src="'+message_in.msg_values.avatar_url+'" />');
+                }
+                if (message_in.msg_values.status === 'operator_talking') {
+                    informer.removeClass().addClass('lirax-informer lirax-user-call lirax-informer-show');
+                    widget.addClass('showCallBackPanel');
+                    jQuery('#liraUserStatus .lirax-user-status-text').text(LIRACRM.widgetOptions.callback_text_talking);
+                    jQuery('#liraUserStatus .dots-animation').hide();
+                    clearTimeout(dotsA);
+                    secondsCounter();
+                    clearTimeout(callTimer);
+                    jQuery('#liraTimer').text('30');
+                }
+                if (message_in.msg_values.status === 'operator_stop_talking') {
+                    informer.removeClass().addClass('lirax-informer lirax-user-rating');
+                    widget.addClass('showCallBackPanel');
+            informer.addClass('active').siblings().removeClass('active').closest('.lirax-informer-rating').addClass('lirax-voted');
+                setTimeout(function(){
+                    jQuery('#liraPanel').removeClass('showCallBackPanel');
+                }, 1000);
+                setTimeout(function(){
+                        callBackDefault();
+                }, 1300);
+                    clearTimeout(secondsA);
+                    clearTimeout(callTimer);
+                }
+                if (message_in.msg_values.status === 'operator_stop_talking_s') {
+                    informer.removeClass().addClass('lirax-informer lirax-user-rating');
+                    widget.addClass('showCallBackPanel');
+                    jQuery('body').addClass('lirax-blur');
+                    setTimeout(function(){
+                            jQuery('body').addClass('lirax-blur-color');
+                    }, 300);
+                    clearTimeout(secondsA);
+                    clearTimeout(callTimer);
+                }
+                if (message_in.msg_values.status === 'operator_stop_talking_no_rating') {
+
+                    informer.removeClass().addClass('lirax-informer lirax-user-rating');
+                    widget.addClass('showCallBackPanel');
+            informer.addClass('active').siblings().removeClass('active').closest('.lirax-informer-rating').addClass('lirax-voted');
+                setTimeout(function(){
+                    jQuery('#liraPanel').removeClass('showCallBackPanel');
+                }, 1000);
+                setTimeout(function(){
+                        callBackDefault();
+                }, 1300);
+                    clearTimeout(secondsA);
+                    clearTimeout(callTimer);
+                }
+                if (message_in.msg_values.status === 'operator_reject_talking') {
+                    clearTimeout(dotsA);
+                    clearTimeout(callTimer);
+                    jQuery('.lirax-informer-timer').hide();
+                    messageErrorConnect = LIRACRM.widgetOptions.callback_text_operator_reject;
+                    widget.addClass('showCallBackPanel');
+                    informer.removeClass().addClass('lirax-informer lirax-user-connect lirax-informer-close');
+                    jQuery('.lirax-informer-connection').html(messageErrorConnect);
+                    /*setTimeout(function(){
+                        $('.lira-callback-wrap').removeClass('timerStart');
+                        $('.lira-informer').removeClass('lira-user-connect');
+                        messageErrorConnect = 'Соединение<br> с оператором<span class="dots-animation"></span>';
+                        $('.lira-informer-connection').html(messageErrorConnect);
+                        $('.lira-informer-timer').show();
+                        $('#liraTimer').text('30');
+                    },4000);*/
+                }
+                if (message_in.msg_values.status === 'user_reject_talking') {
+                    clearTimeout(dotsA);
+                    clearTimeout(callTimer);
+                    jQuery('.lirax-informer-timer').hide();
+                    messageErrorConnect = LIRACRM.widgetOptions.callback_text_user_reject;
+                    widget.addClass('showCallBackPanel');
+                    informer.removeClass().addClass('lirax-informer lirax-user-connect lirax-informer-close');
+                    jQuery('.lirax-informer-connection').html(messageErrorConnect);
+                    /*setTimeout(function(){
+                        $('.lira-callback-wrap').removeClass('timerStart');
+                        $('.lira-informer').removeClass('lira-user-connect');
+                        messageErrorConnect = 'Соединение<br> с оператором<span class="dots-animation"></span>';
+                        $('.lira-informer-connection').html(messageErrorConnect);
+                        $('.lira-informer-timer').show();
+                        $('#liraTimer').text('30');
+                    },4000);*/
+                }
+                if (message_in.msg_values.status === 'operator_hung_up') {
+                    clearTimeout(dotsA);
+                    clearTimeout(callTimer);
+                    jQuery('.lirax-informer-timer').hide();
+                    messageErrorConnect = LIRACRM.widgetOptions.callback_text_operator_hungup;
+                    widget.addClass('showCallBackPanel');
+                    informer.removeClass().addClass('lirax-informer lirax-user-connect lirax-informer-close');
+                    jQuery('.lirax-informer-connection').html(messageErrorConnect);
+                    /*setTimeout(function(){
+                        $('.lira-callback-wrap').removeClass('timerStart');
+                        $('.lira-informer').removeClass('lira-user-connect');
+                        messageErrorConnect = 'Соединение<br> с оператором<span class="dots-animation"></span>';
+                        $('.lira-informer-connection').html(messageErrorConnect);
+                        $('.lira-informer-timer').show();
+                        $('#liraTimer').text('30');
+                    },4000);*/
+                }
+                if (message_in.msg_values.continue == "0") {
+                    clearTimeout(timerA);
+                    clearTimeout(dotsA);
+                    jQuery('.lirax-informer-timer').hide();
+                    messageErrorConnect = LIRACRM.widgetOptions.callback_text_operator_reject;
+                    jQuery('.lirax-informer-connection').html(messageErrorConnect);
+                    widget.addClass('showCallBackPanel');
+                    informer.removeClass().addClass('lirax-informer lirax-user-connect lirax-informer-close');
+                }
+
+            }
+        }
+
+        if (message_in.msg_type == 'typing') {
+
+        }
+        
+        
+        if (message_in.msg_type == 'update') {
+            message_out = {
+                "info": "update",
+                "msg_values": {
+                    "client":id_client,
+                    "widget_id":LIRAX.widgetOptions.token,
+                    "ga_client_id":LIRAX.ga.getClientId(),
+                    "ga_site_id":LIRAX.ga.getTrackingId()
+                }
+            };
+            
+            id_client = message_in.msg_values.client;
+            setCookieLirax('lirax_id_client', message_in.msg_values.client, 3650);
+        
+            socket.send(JSON.stringify(message_out));
+            lira_log('отправлены данные: '+JSON.stringify(message_out),4);
+        }
+        
+        if (message_in.msg_type == 'calltracking') {
+           if (message_in.msg_values.status == "0") {
+               ct_provider_replace = '0';
+           }
+        }
+
+        if (message_in.msg_type == 'client') {
+            message_out = {
+                "info": "client",
+                "value" : message_in.msg_values.id_client
+            };
+            id_client = message_in.msg_values.id_client;
+            setCookieLirax('lirax_id_client', message_in.msg_values.id_client, 3650);
+        }
+
+        if (message_in.msg_type == 'ping') {
+            var checkInactivityTime = new Date();
+            var inactivityTime = checkInactivityTime - inactivityClientTimeStart;
+            message_out = {
+                    "pong": "pong",
+                    "inactivity_time": parseInt(inactivityTime/1000)
+            };
+
+            lira_log("Отправлены данные: " + JSON.stringify(message_out),4);
+            socket.send(JSON.stringify(message_out));
+            if (message_in.msg_values.me_offline == "1" && check_operator_status == "1") {
+                jQuery('#lirax-chat-userpic img').attr('src', '');
+                jQuery('#lirax-chat-userpic img').hide();
+                jQuery('#lirax-chat-usertitle').text(LIRACRM.widgetOptions.chat_header_open_offline);
+                jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_subheader_open_offline);
+                //if (chatGreetingOffline == 1) {
+                    //sendMessage(LIRACRM.widgetOptions.chat_greeting_offline, true, false, true);
+                    //chatGreetingOffline = 0;
+                    //askDefault = 1;
+                    //chat_show_greeting = "0";
+                    //setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+                    //setCookieToMidnightLirax('lirax_chat_show_greeting_offline', chatGreetingOffline);
+                //};
+                check_operator_status = "0";
+            }
+            if (message_in.msg_values.me_offline == "0" &&  check_operator_status == "0" && LIRACRM.widgetOptions.isWorkTime()) {
+                //chatGreetingOffline = 1;
+                //chat_show_greeting = "1";
+                //askDefault = 0;
+                //setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+                //setCookieToMidnightLirax('lirax_chat_show_greeting_offline', chatGreetingOffline);
+                jQuery('#lirax-chat-userpic img').attr('src', '');
+                jQuery('#lirax-chat-userpic img').hide();
+                jQuery('#lirax-chat-usertitle').text(LIRACRM.widgetOptions.chat_header_open_online);
+                jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_subheader_open_online);
+                check_operator_status = "1";
+                //if (chat_open) {
+                    //if (chat_show_greeting == "1") {
+                        //sendMessage(LIRACRM.widgetOptions.chat_greeting_online, true, false, true);
+                        //askDefault = 1;
+                        //chatGreetingOffline = 0;
+                        //chat_show_greeting = "0";
+                        //setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+                        //setCookieToMidnightLirax('lirax_chat_show_greeting_offline', chatGreetingOffline);
+                    //};
+                //}
+            }
+        }
+
+        if (message_in.msg_type == 'callme') {
+
+        }
+        //if (LIRACRM.widgetOptions.chatShow) {
+
+        if (message_in.msg_type == 'route') {
+            message_out = {
+                    "info": "ask_default"
+            };
+
+            lira_log("Отправлены данные: " + JSON.stringify(message_out),4);
+            socket.send(JSON.stringify(message_out));
+        }
+        
+        if (message_in.msg_type == 'widget_status') {
+            if (message_in.msg_values.me_offline == "1" && check_operator_status == "1") {
+                jQuery('#lirax-chat-userpic img').attr('src', '');
+                jQuery('#lirax-chat-userpic img').hide();
+                jQuery('#lirax-chat-usertitle').text(LIRACRM.widgetOptions.chat_header_open_offline);
+                jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_subheader_open_offline);
+                //if (chatGreetingOffline == 1) {
+                    //sendMessage(LIRACRM.widgetOptions.chat_greeting_offline, true, false, true);
+                    //chatGreetingOffline = 0;
+                    //askDefault = 1;
+                    //chat_show_greeting = "0";
+                    //setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+                    //setCookieToMidnightLirax('lirax_chat_show_greeting_offline', chatGreetingOffline);
+                //};
+                check_operator_status = "0";
+            }
+            if (message_in.msg_values.me_offline == "0") {
+                //chatGreetingOffline = 1;
+                //askDefault = 0;
+                //chat_show_greeting = "1";
+                //setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+                //setCookieToMidnightLirax('lirax_chat_show_greeting_offline', chatGreetingOffline); 
+            }
+        }
+
+        //}
+
+        if (message_in.msg_type == 'error') {
+
+        }
+
+        if (message_in.msg_type == 'dtls_ok') {
+
+        }
+
+        if (message_in.msg_type == 'dtls_ko') {
+
+        }
+        
+        if (message_in.msg_type == 'server_work_time') {
+            LIRACRM.serverIsWorkTime = message_in.msg_values.is_work_time;
+        }
+
+    };
+
+}
+//window.onload = function() {
+    //lira_log('window onload',4);
+    if (LIRACRM.widgetOptions.chatShow) { 
+        scrollDownChat();
+    }
+    if (LIRACRM.widgetOptions.chatShow && chat_open == "1") {
+        setTimeout(function(){
+            jQuery("#liraWidget [data-action='showliraChat']").trigger('click');
+        },2500);
+    }
+    
+    LIRACRM.clearForm = LIRAX.clearForm = function() {
+        jQuery('.lirax-custom-form-sent-message').text('');
+        jQuery('.lirax-custom-form-name-validate').text('');
+        jQuery('.lirax-custom-form-phone-validate').text('');
+        jQuery('form.lirax-custom-form').removeClass('lirax-custom-form-sent'); 
+    };
+    
+    LIRACRM.showWidget = LIRAX.showWidget = function() {
+        if (LIRACRM.widgetOptions.isWorkTime()) {
+            //body.removeClass('lira-open');
+            if (widgetOpened) {
+                jQuery('#liraWidget').removeClass('showCallBackPanel');
+                jQuery('#liraPanel').removeClass('showCallBackPanel');
+                widgetOpened = 0;
+            } else {
+                
+                jQuery('#liraWidget').addClass('showCallBackPanel');
+                if (jQuery('#liraWidget').hasClass('showChatPanel')) {
+                    jQuery('#liraWidget').removeClass('showChatPanel');
+                    if (connected) {
+                        var message_out = {
+                            "info": "chat_close",
+                            "client_id": id_client,
+                            "widget_id": LIRAX.widgetOptions.token
+                        };
+
+                        lira_log("Отправлены данные: " + JSON.stringify(message_out),4);
+                        socket.send(JSON.stringify(message_out));
+                    }
+                    chat_closed = true;
+                    chat_open = "0";
+                    setCookieToMidnightLirax('lirax_chat_open', chat_open);
+                }
+                if (jQuery('#liraPanel').find('.lirax-informer').hasClass('lirax-informer-close')) {
+                    jQuery('#liraPanel').find('.lirax-informer').removeClass('lirax-user-connect');
+                    jQuery('#liraPanel').find('.lirax-informer').removeClass('lirax-informer-close');
+                    jQuery('.lirax-callback-wrap').removeClass('timerStart');
+                }
+                if (!jQuery('#liraPanel').find('.lirax-informer').hasClass('lirax-informer-show')) {
+                    jQuery('#liraPanel').addClass('showCallBackPanel');
+                } else {
+                    jQuery('#liraPanel').find('.lirax-informer').toggleClass('lirax-informer-hide');
+                }
+                if (jQuery('#liraPanel').hasClass('showChatPanel')) {
+                    jQuery('#liraPanel').removeClass('showChatPanel');
+                }
+                widgetOpened = 1;
+            
+            }
+        } else {
+            jQuery("#liracrm-modal-callme").trigger('click');
+        }
+    };
+    
+    LIRACRM.showChat = LIRAX.showChat = function(param) {
+        if (!LIRACRM.widgetOptions.isWorkTime()) {
+            lira_log('callback is not work time',4);
+            jQuery('#lirax-chat-userpic img').attr('src', '');
+            jQuery('#lirax-chat-userpic img').hide();
+            jQuery('#lirax-chat-usertitle').text(LIRACRM.widgetOptions.chat_header_open_offline);
+            jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_subheader_open_offline);
+            if (chatGreetingOffline == "1") {
+                sendMessage(LIRACRM.widgetOptions.chat_greeting_offline, true, false, true);
+                chatGreetingOffline = "0";
+                //askDefault = 1;
+                //chat_show_greeting = "0";
+                setCookieToMidnightLirax('lirax_chat_show_greeting_offline', chatGreetingOffline);
+            }
+            if (chat_show_greeting == "0" && askDefault) {
+                askDefault = false;
+                chat_show_greeting = "1";
+                setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+            }
+        }
+        /*if (panel.hasClass('showChatPanel')) {
+            body.removeClass('lira-open');
+        } else {
+            body.addClass('lira-open');
+        }*/
+        jQuery('#liraWidget').toggleClass('showChatPanel');
+        if(jQuery('#liraWidget').hasClass('showCallBackPanel')) {
+            jQuery('#liraWidget').removeClass('showCallBackPanel');
+        }
+        jQuery('#liraPanel').toggleClass('showChatPanel');
+        if(jQuery('#liraPanel').hasClass('showCallBackPanel') && !informer.hasClass('lirax-informer-show')) {
+            jQuery('#liraPanel').removeClass('showCallBackPanel');
+        } else {
+            if (LIRACRM.widgetOptions.widgetShow) {
+                if (!informer.hasClass('lirax-informer-hide')) {
+                    informer.addClass('lirax-informer-hide');
+                }
+            }
+        }
+        if (chat_closed) {
+            if (connected) {
+                message_out = {
+                    "info": "chat_open",
+                    "client_id": id_client,
+                    "widget_id": LIRAX.widgetOptions.token
+                };
+
+                lira_log("Отправлены данные: " + JSON.stringify(message_out),4);
+                socket.send(JSON.stringify(message_out));
+            }
+            chat_closed = false;
+            chat_open = "1";
+            setCookieToMidnightLirax('lirax_chat_open', chat_open);
+            if (!askDefault && connected) {
+                if (LIRACRM.widgetOptions.isWorkTime() && chat_show_greeting == "1") {
+                    jQuery('#lirax-chat-usertitle').text(LIRACRM.widgetOptions.chat_header_open_online);
+                    jQuery('#lirax-chat-usersubtitle').text(LIRACRM.widgetOptions.chat_subheader_open_online);
+                    sendMessage(LIRACRM.widgetOptions.chat_greeting_online, true, false, true);
+                    chat_show_greeting = "0";
+                    setCookieToMidnightLirax('lirax_chat_show_greeting', chat_show_greeting);
+                    if (chatGreetingOffline == "0") {
+                        chatGreetingOffline = "1";
+                        setCookieToMidnightLirax('lirax_chat_show_greeting_offline', chatGreetingOffline);
+                    }
+                    askDefault = true;
+                }
+            }
+        } else {
+            if (connected) {
+                message_out = {
+                    "info": "chat_close",
+                    "client_id": id_client,
+                    "widget_id": LIRAX.widgetOptions.token
+                };
+
+                lira_log("Отправлены данные: " + JSON.stringify(message_out),4);
+                socket.send(JSON.stringify(message_out));
+            }
+            chat_closed = true;
+            chat_open = "0";
+            setCookieToMidnightLirax('lirax_chat_open', chat_open);
+            enable_scroll();
+        }
+        if (param != undefined && param.text != undefined) {
+            jQuery('#lirax-chat-footer-field').val(param.text);
+        }
+        if (param != undefined && param.text != undefined && param.send != undefined && param.text != '' && param.send != '' && (param.send == 'true' || param.send == '1')) {
+            sendMessage(param.text, false, false, true);
+        } 
+    };
+    
+    jQuery('form.lirax-custom-form').submit({event_type: 'submit'}, contactFormDataSend, 1);
+    jQuery('form.lirax-custom-form').on('click','a.lirax-custom-form', {event_type: 'click'},contactFormDataSend, 0);
+    jQuery('form.lirax-custom-form input[name="phone"]').on('keyup', webFormPhoneInputValidateKeyUp);
+    jQuery('form.lirax-custom-form input[name="phone"]').on('keydown', webFormPhoneInputValidateKeyDown);
+    //$('form.lirax-custom-form input[name="phone"]').on('focus', webFormPhoneInputValidateFocus);
+    function contactFormDataSend(event) {
+        var form;
+        if (event.data.event_type == 'submit') {
+            form = jQuery(event.target);
+        } else {
+            form = jQuery(event.delegateTarget);
+        }
+        event.preventDefault();
+        var formId = form.attr("id") || '',
+            formEventSubmit;
+        
+        if (formId.length > 0) {
+            formEventSubmit = 'liraxEventFormSubmit_'+formId;
+        } else {
+            formEventSubmit = 'liraxEventFormSubmit';
+        }
+        
+        var webFormNameErrorMessage = form.find('input[name="name"]').data('error');
+        if (webFormNameErrorMessage == undefined || webFormNameErrorMessage == '') {
+            webFormNameErrorMessage = 'Поле обязательно для заполнения и должно быть больше 3 символов!';
+        }
+
+        var webFormPhoneErrorMessage = form.find('input[name="phone"]').data('error');
+        if (webFormPhoneErrorMessage == undefined || webFormPhoneErrorMessage == '') {
+            webFormPhoneErrorMessage = 'Поле обязательно для заполнения и должно быть больше 8 символов!';
+        }
+        
+        var webFormInputNameVal = form.find('input[name="name"]').val();
+        
+        if (webFormInputNameVal == undefined) {
+            return false;
+        } else if (webFormInputNameVal.length < 4 || webFormInputNameVal == '') {
+            if (form.has('.lirax-custom-form-name-validate').length) {
+                form.find('.lirax-custom-form-name-validate').text(webFormNameErrorMessage);
+            } else {
+                form.find('input[name="name"]').after('<div class="lirax-custom-form-name-validate" style="color:red;font-size:12px;width:300px;"></div>');
+                form.find('.lirax-custom-form-name-validate').text(webFormNameErrorMessage);
+            }
+            return false;
+        } else {
+            form.find('.lirax-custom-form-name-validate').text('');
+        }
+        
+        var webFormInputPhoneVal = form.find('input[name="phone"]').val();
+        webFormInputPhoneVal = webFormInputPhoneVal.replace(/[^0-9]/gi, '');
+        webFormInputPhoneVal = webFormInputPhoneVal.substr(webFormInputPhoneVal.length - 9);
+        //console.log('webFormInputPhoneVal.length ',webFormInputPhoneVal.length);
+        if (webFormInputPhoneVal == undefined) {
+            return false;
+        } else if (webFormInputPhoneVal.length < 9 || webFormInputPhoneVal == '') {
+            if (form.has('.lirax-custom-form-phone-validate').length) {
+                form.find('.lirax-custom-form-phone-validate').text(webFormPhoneErrorMessage);
+            } else {
+                form.find('input[name="phone"]').after('<div class="lirax-custom-form-phone-validate" style="color:red;font-size:12px;width:300px;"></div>');
+                form.find('.lirax-custom-form-phone-validate').text(webFormPhoneErrorMessage);
+            }
+            return false;
+        } else {
+            
+            form.find('.lirax-custom-form-phone-validate').text('');
+            
+        }
+        
+        var formData = form.serializeArray(), formFields = {'message':'Сообщение с веб формы сайта: ', 'integration':{}};
+        jQuery(formData).each(function(a, b) {
+            if (b.name == 'lirax_pipeline_status_id') {
+                formFields['integration'][b.name] = b.value; 
+            } else if (b.name == 'lirax_deal_name') {
+                formFields['integration'][b.name] = b.value; 
+            } else if (b.name == 'lirax_deal_sum') {
+                formFields['integration'][b.name] = b.value; 
+            } else if (b.name == 'lirax_deal_task') {
+                formFields['integration'][b.name] = b.value; 
+            } else if (b.name == 'lirax_deal_tag') {
+                formFields['integration'][b.name] = b.value; 
+            } else if (b.name == 'lirax_contact_task') {
+                formFields['integration'][b.name] = b.value; 
+            } else if (b.name == 'lirax_contact_tag') {
+                formFields['integration'][b.name] = b.value; 
+            } else if (b.name == 'name') {
+                formFields[b.name] = b.value;
+                formFields['message'] += b.name + '=' + b.value + ';';
+            } else if (b.name == 'phone') {
+                formFields[b.name] = LIRACRM.widgetOptions.defaultPrefix+webFormInputPhoneVal;
+                formFields['message'] += b.name + '=' + LIRACRM.widgetOptions.defaultPrefix+webFormInputPhoneVal + ';';
+            } else {
+                formFields['message'] += b.name + '=' + b.value + ';'; 
+            }  
+        });
+
+        if (connected) {
+            var message_out = {
+                "info": "web_new_message_client",
+                "msg_values": {
+                    "client_id": id_client,
+                    "widget_id": LIRAX.widgetOptions.token,
+                    "text": formFields.message,
+                    "contact_form_name": formFields.name,
+                    "contact_form_phone": formFields.phone,
+                    "integration": formFields.integration,
+                    "web_form": 1
+                    //"utm_source": sbsrc,
+                    //"utm_medium": sbmdm,
+                    //"utm_campaign": sbcmp,
+                    //"utm_term": sbtrm,
+                    //"clientId": LIRAX.ga.getClientId(),
+                    //"trackingId": LIRAX.ga.getTrackingId(),
+                }
+            };
+            socket.send(JSON.stringify(message_out));
+            lira_log('отправлены данные: '+JSON.stringify(message_out),4);
+            if (form.has('.lirax-custom-form-sent-message').length) {
+                form.find('.lirax-custom-form-sent-message').text('Данные отправлены успешно');
+                form.find('.lirax-custom-form-name-validate').text('');
+                form.find('.lirax-custom-form-phone-validate').text('');
+                form.addClass('lirax-custom-form-sent');
+            } else {
+                form.prepend('<div class="lirax-custom-form-sent-message"></div>');
+                form.find('.lirax-custom-form-sent-message').text('Данные отправлены успешно');
+                form.find('.lirax-custom-form-name-validate').text('');
+                form.find('.lirax-custom-form-phone-validate').text('');
+                form.addClass('lirax-custom-form-sent');
+            }
+            jQuery( document ).trigger( formEventSubmit, [ {success:true} ] );
+        } else {
+            if (form.has('.lirax-custom-form-sent-message').length) {
+                form.find('.lirax-custom-form-sent-message').text('Ошибка отправки :( Попробуйте позже');
+                form.find('.lirax-custom-form-name-validate').text('');
+                form.find('.lirax-custom-form-phone-validate').text('');
+                form.addClass('lirax-custom-form-not-sent');
+            } else {
+                form.prepend('<div class="lirax-custom-form-sent-message"></div>');
+                form.find('.lirax-custom-form-sent-message').text('Ошибка отправки :( Попробуйте позже');
+                form.find('.lirax-custom-form-name-validate').text('');
+                form.find('.lirax-custom-form-phone-validate').text('');
+                form.addClass('lirax-custom-form-not-sent');
+            }
+            jQuery( document ).trigger( formEventSubmit, [ {success:false} ] );
+        }
+    }
+    function webFormPhoneInputValidateKeyDown(e) {
+        if ((!/[0-9,+,(,),\-,\s]{1}/.test(e.key) && (e.keyCode != '8' && e.keyCode != '13' && e.keyCode != '37' && e.keyCode != '39' && e.keyCode != '46' && e.keyCode != '17' && e.keyCode != '86'))) {
+           e.preventDefault();
+           return false;
+        }
+        var input = jQuery(this),
+            webFormInputPhoneVal = input.val(),
+            maxLengthWebFormInputPhoneVal = input.attr('maxlength'),
+            typeWebFormInputPhoneVal = input.attr('type');
+        lira_log('webFormInputPhoneVal '+webFormInputPhoneVal,4);
+
+        if (!/^\+(380)$/.test(webFormInputPhoneVal)) {
+            //$('form.lirax-custom-form input[name="phone"]').val('+380');
+        } 
+        /*
+         if ((e.keyCode == '8' && (/^\+(380)$/.test(this.value)))
+            || (!/[0-9]{1}/.test(e.key) && (e.keyCode != '8' && e.keyCode != '13'))) {
+           e.preventDefault();
+           return false;
+         }
+        console.log('this.value.length',this.value.length);
+        */
+        if (typeWebFormInputPhoneVal === 'number' && parseInt(maxLengthWebFormInputPhoneVal) > 0) {
+            if (this.value.length > parseInt(maxLengthWebFormInputPhoneVal)-1 && (e.keyCode != '8' && e.keyCode != '13' && e.keyCode != '37' && e.keyCode != '39' && e.keyCode != '46' && e.keyCode != '17' && e.keyCode != '86')) {
+                e.preventDefault();
+                return false;
+            }
+        }
+    }
+    function webFormPhoneInputValidateKeyUp(e) {
+        /*if (this.value.length === 0) {
+            this.value = '+380';
+        }*/
+        
+    }
+    /*function webFormPhoneInputValidateFocus(e) {
+        if (!/^\+(380)$/.test(this.value)) {
+            this.value = '+380';
+        } 
+    }*/
+//};
+};
